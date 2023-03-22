@@ -1,0 +1,1 @@
+Wikipedia-API==0.5.8
