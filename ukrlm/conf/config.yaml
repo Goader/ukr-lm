@@ -1,0 +1,7 @@
+stage: train
+seed: 0
+defaults:
+  - datamodule: c4
+  - model: bert-base
+  - task: language-modeling
+  - _self_
