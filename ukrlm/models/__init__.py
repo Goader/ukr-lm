@@ -1,1 +1,1 @@
-from .bert_base import BERTBase
+from .bert import BERT
