@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 import torch
 
 from ukrlm.datamodules.c4 import C4DataModule
-from ukrlm.models.bert_base import BERTBase
+from ukrlm.models.bert import BERT
 from ukrlm.tasks.masked_language_modeling import MaskedLanguageModelingTask
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ def main(cfg: DictConfig):
 
     match cfg.model.name:
         case 'bert-base':
-            model = BERTBase(cfg)
+            model = BERT(cfg)
         case _:
             raise ValueError(
                 'unknown model, can be either `bert-base` or ...'
