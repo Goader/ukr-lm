@@ -1,0 +1,12 @@
+python train-sentencepiece.py \
+  --input=$DATA_DIR/train.txt \
+  --model_prefix=$DATA_DIR/spm \
+  --self_test_sample_size=??? \
+  --character_coverage=??? \
+  --input_sentence_size=??? \
+  --num_threads=??? \
+  --num_subprocess=??? \
+  --user_defined_symbols_file=$DATA_DIR/user_defined_symbols.txt \
+  --byte_fallback=??? \
+  --normalization_rule_tsv=$DATA_DIR/normalization_rule.tsv \
+  --add_dummy_prefix=???
