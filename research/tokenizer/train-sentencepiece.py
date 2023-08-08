@@ -19,7 +19,7 @@ if __name__ == '__main__':
                              'to verify the correctness of the trained model.')
     parser.add_argument('--character-coverage', type=float, default=0.9995,
                         help='Specifies the desired character coverage for training. For example, '
-                             'setting it to 0.9995 ensures that at least 99.95% of the input text '
+                             'setting it to 0.9995 ensures that at least 99.95%% of the input text '
                              'characters are covered by the model\'s vocabulary.')
     parser.add_argument('--input-sentence-size', type=int, default=10_000_000,
                         help='Specifies the maximum number of sentences to use for training. '
@@ -95,11 +95,11 @@ if __name__ == '__main__':
                              'they are not handled as one token. User needs to insert ids explicitly after encoding.')
     parser.add_argument('--control-symbols-file', type=str, default=None,
                         help='Load control symbols from file')
-    parser.add_argument('--user-defined-symbols', type=str, default=None, examples=['"doesn\'t","isn\'t"'],
+    parser.add_argument('--user-defined-symbols', type=str, default=None,
                         help='This parameter allows you to define a list of regular expressions that will be treated '
                              'as special tokens by SentencePiece. These tokens will not be further divided during '
                              'the tokenization process. Each regular expression should be enclosed in double quotation '
-                             'marks if it contains spaces or special characters.')  # TODO should we add apostophes here?
+                             'marks if it contains spaces or special characters. For example, "doesn\'t","isn\'t"')  # TODO should we add apostophes here?
     parser.add_argument('--user-defined-symbols-file', type=str, default=None,
                         help='Load user defined symbols from file')
     parser.add_argument('--required-chars', type=str, default=None,
