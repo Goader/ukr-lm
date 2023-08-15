@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--character-coverage', type=float, default=0.9995,
                         help='Specifies the desired character coverage for training. For example, '
                              'setting it to 0.9995 ensures that at least 99.95%% of the input text '
-                             'characters are covered by the model\'s vocabulary.')
+                             'characters (all, not unique) are covered by the model\'s vocabulary.')
     parser.add_argument('--input-sentence-size', type=int, default=10_000_000,
                         help='Specifies the maximum number of sentences to use for training. '
                              'Useful for large corpora to limit memory usage during training.')
@@ -41,9 +41,9 @@ if __name__ == '__main__':
                              'BPE merge operations for BPE model training.')
     parser.add_argument('--max-sentencepiece-length', type=int, default=16,
                         help='Specifies the maximum length of sentence pieces. Measured in Unicode characters.')
-    parser.add_argument('--num-subprocess', type=int, default=4,
-                        help='This option specifies the number of subprocesses that SentencePiece will use for '
-                             'certain tasks, such as vocabulary generation and BPE merge operations, during training.')
+    # parser.add_argument('--num-subprocess', type=int, default=4,
+    #                     help='This option specifies the number of subprocesses that SentencePiece will use for '
+    #                          'certain tasks, such as vocabulary generation and BPE merge operations, during training.')
     parser.add_argument('--max-sentence-length', type=int, default=10000000,
                         help='Specifies the maximum length of sentences to use for training. Measured in bytes.')
 
@@ -93,22 +93,22 @@ if __name__ == '__main__':
                         help='Special tokens that are used for control purposes, like BERT\'s [CLS] and [SEP]. '
                              'We only reserve ids for these tokens. Even if these tokens appear in the input text, '
                              'they are not handled as one token. User needs to insert ids explicitly after encoding.')
-    parser.add_argument('--control-symbols-file', type=str, default=None,
-                        help='Load control symbols from file')
+    # parser.add_argument('--control-symbols-file', type=str, default=None,
+    #                     help='Load control symbols from file')
     parser.add_argument('--user-defined-symbols', type=str, default=None,
                         help='This parameter allows you to define a list of regular expressions that will be treated '
                              'as special tokens by SentencePiece. These tokens will not be further divided during '
                              'the tokenization process. Each regular expression should be enclosed in double quotation '
                              'marks if it contains spaces or special characters. For example, "doesn\'t","isn\'t"')  # TODO should we add apostophes here?
-    parser.add_argument('--user-defined-symbols-file', type=str, default=None,
-                        help='Load user defined symbols from file')
+    # parser.add_argument('--user-defined-symbols-file', type=str, default=None,
+    #                     help='Load user defined symbols from file')
     parser.add_argument('--required-chars', type=str, default=None,
                         help='This option allows you to specify a list of characters that must be included in the '
                              'vocabulary. If a character is not included in the vocabulary, it will be treated as '
                              'an unknown character. This option is useful for languages that use a large number of '
                              'characters, such as Chinese, Japanese, and Korean.')
-    parser.add_argument('--required-chars-file', type=str, default=None,
-                        help='Load required chars from file')
+    # parser.add_argument('--required-chars-file', type=str, default=None,
+    #                     help='Load required chars from file')
 
     # normalization options
     parser.add_argument('--byte-fallback', type=bool, default=False,
@@ -121,19 +121,22 @@ if __name__ == '__main__':
                         help='This option allows you to specify whether SentencePiece should output the score of each '
                              'token in the vocabulary. The score is a floating point number between 0 and 1 that '
                              'indicates the probability of the token appearing in the input text.')
-    parser.add_argument('--vocabulary-output-word-score', type=bool, default=True,
-                        help='This option allows you to specify whether SentencePiece should output the score of each '
-                             'word in the vocabulary. The score is a floating point number between 0 and 1 that '
-                             'indicates the probability of the word appearing in the input text.')
+    # parser.add_argument('--vocabulary-output-word-score', type=bool, default=True,
+    #                     help='This option allows you to specify whether SentencePiece should output the score of each '
+    #                          'word in the vocabulary. The score is a floating point number between 0 and 1 that '
+    #                          'indicates the probability of the word appearing in the input text.')
     parser.add_argument('--normalization-rule-name', type=str, default=None,
                         help='This option allows you to specify a normalization rule name. SentencePiece provides '
                              'several normalization rules, such as nfkc, nmt_nfkc_cf, and identity. '
                              'See what each normalization includes.')
     parser.add_argument('--normalization-rule-tsv', type=str, default=None, help='Load normalization rule tsv')
     parser.add_argument('--denormalization-rule-tsv', type=str, default=None, help='Load denormalization rule tsv')
-    parser.add_argument('--add-dummy-prefix', type=bool, default=False,
+    parser.add_argument('--add-dummy-prefix', type=bool, default=True,
                         help='This option allows you to specify whether SentencePiece should add a dummy prefix '
                              'at the beginning of the input text.')
+    parser.add_argument('--remove-extra-whitespaces', type=bool, default=True,
+                        help='Extra whitespaces are removed from the output text. For specific purposes, '
+                             'such as code tokenization, you may want to disable this option.')
     parser.add_argument('--hard-vocab-limit', type=int, default=False,
                         help='Enables hard vocabulary limit. When the vocabulary size reaches the limit, '
                              'the least frequent tokens are dropped to satisfy the size constraint. '
@@ -161,24 +164,29 @@ if __name__ == '__main__':
                         help='The surface form of the unknown token - used for decoding to specify the '
                              'unknown token in the output text.')
 
+    # TODO add Unigram parameters
+
     # training process
     parser.add_argument('--train-extremely-large-corpus', type=bool, default=True,
                         help='Enables a mode for training on extremely large corpora '
                              'by adjusting internal buffer sizes.')
     parser.add_argument('--random-seed', type=int, default=0,
                         help='Random seed, which ensures the reproducibility of training.')
-    parser.add_argument('--minloglevel', type=int, default=1,
+    parser.add_argument('--minloglevel', type=int, default=0,
                         help='Specifies the minimum level of logging messages to display. '
-                             'Values are 0 (only display errors), 1 (warnings are displayed), '
-                             '2 (informational messages are displayed), and 3 (debug messages are displayed).')
+                             'Values are 0 (display INFO messages), 1 (display WARNING messages), '
+                             '2 (display ERROR messages).')
     args = parser.parse_args()
 
+    # prepare everything for training
+    spm.set_random_generator_seed(args.random_seed)
+
+    EXCLUDED_ARGS = ['random_seed']
+    kwargs = {
+        k: v for k, v in vars(args).items()
+        if k not in EXCLUDED_ARGS and v is not None
+    }
+
     t1 = time.time()
-    spm.SentencePieceTrainer.train(
-        input=args.input,
-        model_prefix=args.output,
-        model_type=args.model_type,
-        vocab_size=args.vocab_size,
-        # TODO
-    )
+    spm.SentencePieceTrainer.Train(**kwargs)
     print(f"Training time: {time.time() - t1:.2f} sec")
