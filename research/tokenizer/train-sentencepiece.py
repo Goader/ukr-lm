@@ -89,7 +89,7 @@ if __name__ == '__main__':
                              'token boundary, so that this pieces will never get split. When "@" is specified as user '
                              'defined symbol, "@" is always treated as one piece, meaning that no piece containing '
                              '"@" inside will not be extracted. Probably the name of "symbol" is misleading. The '
-                             'intention is user-defined-piece.')
+                             'intention is user-defined-piece. See https://github.com/google/sentencepiece/issues/217')
     parser.add_argument('--user-defined-symbols-file', type=str, default=None,
                         help='Load user defined symbols from file, https://github.com/google/sentencepiece/issues/536')
     parser.add_argument('--required-chars', type=str, default=None,
@@ -111,7 +111,7 @@ if __name__ == '__main__':
                         help='This option allows you to specify whether SentencePiece should output the score of each '
                              'token in the vocabulary. The score is a floating point number between 0 and 1 that '
                              'indicates the probability of the token appearing in the input text.')
-    parser.add_argument('--normalization-rule-name', type=str, default='identity',
+    parser.add_argument('--normalization-rule-name', type=str, default=None,
                         help='This option allows you to specify a normalization rule name. SentencePiece provides '
                              'several normalization rules, such as nfkc, nmt_nfkc_cf, and identity. '
                              'See what each normalization includes.')
@@ -178,23 +178,23 @@ if __name__ == '__main__':
             print('WARNING: control_symbols_file and control_symbols are both specified. '
                   'control_symbols_file will be used.')
         kwargs['control_symbols'] = load_symbols(args.control_symbols_file)
+        print('Loaded control symbols: ', kwargs['control_symbols'])
 
     if args.user_defined_symbols_file is not None:
         if args.user_defined_symbols is not None:
             print('WARNING: user_defined_symbols_file and user_defined_symbols are both specified. '
                   'user_defined_symbols_file will be used.')
         kwargs['user_defined_symbols'] = load_symbols(args.user_defined_symbols_file)
+        print('Loaded user defined symbols: ', kwargs['user_defined_symbols'])
 
     if args.required_chars_file is not None:
         if args.required_chars is not None:
             print('WARNING: required_chars_file and required_chars are both specified. '
                   'required_chars_file will be used.')
         kwargs['required_chars'] = load_symbols(args.required_chars_file)
+        print('Loaded required chars: ', kwargs['required_chars'])
 
     # training process
     t1 = time.time()
     spm.SentencePieceTrainer.Train(**kwargs)
     print(f"Training time: {time.time() - t1:.2f} sec")
-
-    # evaluate the model
-    # TODO
