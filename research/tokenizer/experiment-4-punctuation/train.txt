@@ -1,0 +1,2 @@
+Some punctuation here.. And then it happens again.. Sometimes it is just one dot. But mostly there are at least 2 dots.. It often can get mixed with numbers, such as 5.. And to repeat a few times 5.. 5..
+Another example (1) with different punctuation (12), so that we can test out user defined symbols (2), or (1), and even (22)
