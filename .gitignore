@@ -140,3 +140,7 @@ research/corpora/cc100
 
 research/tokenizer/*.model
 research/tokenizer/*.vocab
+
+# large train files
+research/tokenizer/experiment-3-overall/train.txt
+research/tokenizer/experiment-5/train.txt

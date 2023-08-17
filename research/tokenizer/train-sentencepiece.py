@@ -4,8 +4,16 @@ import time
 import sentencepiece as spm
 
 
+def load_symbols(filepath: str) -> list[str]:
+    with open(filepath, 'r') as f:
+        symbols = f.read().splitlines()
+    return [s for s in symbols if s]
+
+
 if __name__ == '__main__':
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description='TODO. See https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto'
+    )
     parser.add_argument('--input', type=str, required=True, help='Input filepath to the raw text file.')
     parser.add_argument('--model-prefix', type=str, required=True,
                         help='Output filepath prefix for the trained SentencePiece model. May include a whole path as '
@@ -41,9 +49,6 @@ if __name__ == '__main__':
                              'BPE merge operations for BPE model training.')
     parser.add_argument('--max-sentencepiece-length', type=int, default=16,
                         help='Specifies the maximum length of sentence pieces. Measured in Unicode characters.')
-    # parser.add_argument('--num-subprocess', type=int, default=4,
-    #                     help='This option specifies the number of subprocesses that SentencePiece will use for '
-    #                          'certain tasks, such as vocabulary generation and BPE merge operations, during training.')
     parser.add_argument('--max-sentence-length', type=int, default=10000000,
                         help='Specifies the maximum length of sentences to use for training. Measured in bytes.')
 
@@ -71,44 +76,30 @@ if __name__ == '__main__':
                         help='This option, when used with split_by_whitespace, allows whitespace characters to '
                              'be treated as tokens. For example, the text "Hello World" would be pre-tokenized as '
                              '["Hello", " ", "World"].')
-    # parser.add_argument('--split-by-punctuation', type=bool, default=True,
-    #                     help='This option splits input text into tokens at punctuation boundaries. Punctuation marks '
-    #                          'like periods, commas, semicolons, etc., are treated as token boundaries.')
-    # parser.add_argument('--split-by-whitespace-each', type=bool, default=True,
-    #                     help='Similar to `split_by_whitespace`, but it treats each whitespace character as a separate '
-    #                          'token. So, for the input text "Hello World", SentencePiece would pre-tokenize it as '
-    #                          '["Hello", "", "World"], with two consecutive whitespace characters resulting in an '
-    #                          'empty token.')
-    # parser.add_argument('--split-by-number-each', type=bool, default=True,
-    #                     help='This option, like `split_by_number`, splits input text at the boundaries between numbers '
-    #                          'and non-numbers. However, it treats each digit as a separate token. For example, '
-    #                          'the text "abc123def" would be tokenized as ["abc", "1", "2", "3", "def"].')
-    # parser.add_argument('--split-by-punctuation-each', type=bool, default=True,
-    #                     help='Similar to split_by_punctuation, but treats each punctuation character '
-    #                          'as a separate token. For example, the text "Hello, World!" would be pre-tokenized '
-    #                          'as ["Hello", ",", "World", "!"].')
 
     # special tokens and rules
+    # TODO add a handle for files to pass them as a list https://github.com/google/sentencepiece/issues/536
     parser.add_argument('--control-symbols', type=str, default='<cls>,<sep>,<mask>',
                         help='Special tokens that are used for control purposes, like BERT\'s [CLS] and [SEP]. '
                              'We only reserve ids for these tokens. Even if these tokens appear in the input text, '
                              'they are not handled as one token. User needs to insert ids explicitly after encoding.')
-    # parser.add_argument('--control-symbols-file', type=str, default=None,
-    #                     help='Load control symbols from file')
+    parser.add_argument('--control-symbols-file', type=str, default=None,
+                        help='Load control symbols from file')
     parser.add_argument('--user-defined-symbols', type=str, default=None,
-                        help='This parameter allows you to define a list of regular expressions that will be treated '
-                             'as special tokens by SentencePiece. These tokens will not be further divided during '
-                             'the tokenization process. Each regular expression should be enclosed in double quotation '
-                             'marks if it contains spaces or special characters. For example, "doesn\'t","isn\'t"')  # TODO should we add apostophes here?
-    # parser.add_argument('--user-defined-symbols-file', type=str, default=None,
-    #                     help='Load user defined symbols from file')
+                        help='Defines some custom pieces, which will get replaced during the training with special '
+                             'token boundary, so that this pieces will never get split. When "@" is specified as user '
+                             'defined symbol, "@" is always treated as one piece, meaning that no piece containing '
+                             '"@" inside will not be extracted. Probably the name of "symbol" is misleading. The '
+                             'intention is user-defined-piece.')
+    parser.add_argument('--user-defined-symbols-file', type=str, default=None,
+                        help='Load user defined symbols from file')  # TODO it seems spm_train has this? https://github.com/google/sentencepiece/blob/8cbdf13794284c30877936f91c6f31e2c1d5aef7/src/spm_train_main.cc#L95C54-L95C54
     parser.add_argument('--required-chars', type=str, default=None,
                         help='This option allows you to specify a list of characters that must be included in the '
                              'vocabulary. If a character is not included in the vocabulary, it will be treated as '
                              'an unknown character. This option is useful for languages that use a large number of '
                              'characters, such as Chinese, Japanese, and Korean.')
-    # parser.add_argument('--required-chars-file', type=str, default=None,
-    #                     help='Load required chars from file')
+    parser.add_argument('--required-chars-file', type=str, default=None,
+                        help='Load required chars from file')
 
     # normalization options
     parser.add_argument('--byte-fallback', type=bool, default=False,
@@ -121,11 +112,7 @@ if __name__ == '__main__':
                         help='This option allows you to specify whether SentencePiece should output the score of each '
                              'token in the vocabulary. The score is a floating point number between 0 and 1 that '
                              'indicates the probability of the token appearing in the input text.')
-    # parser.add_argument('--vocabulary-output-word-score', type=bool, default=True,
-    #                     help='This option allows you to specify whether SentencePiece should output the score of each '
-    #                          'word in the vocabulary. The score is a floating point number between 0 and 1 that '
-    #                          'indicates the probability of the word appearing in the input text.')
-    parser.add_argument('--normalization-rule-name', type=str, default=None,
+    parser.add_argument('--normalization-rule-name', type=str, default='identity',
                         help='This option allows you to specify a normalization rule name. SentencePiece provides '
                              'several normalization rules, such as nfkc, nmt_nfkc_cf, and identity. '
                              'See what each normalization includes.')
@@ -181,12 +168,34 @@ if __name__ == '__main__':
     # prepare everything for training
     spm.set_random_generator_seed(args.random_seed)
 
-    EXCLUDED_ARGS = ['random_seed']
+    EXCLUDED_ARGS = ['random_seed', 'control_symbols_file', 'user_defined_symbols_file', 'required_chars_file']
     kwargs = {
         k: v for k, v in vars(args).items()
         if k not in EXCLUDED_ARGS and v is not None
     }
 
+    if args.control_symbols_file is not None:
+        if args.control_symbols is not None:
+            print('WARNING: control_symbols_file and control_symbols are both specified. '
+                  'control_symbols_file will be used.')
+        kwargs['control_symbols'] = load_symbols(args.control_symbols_file)
+
+    if args.user_defined_symbols_file is not None:
+        if args.user_defined_symbols is not None:
+            print('WARNING: user_defined_symbols_file and user_defined_symbols are both specified. '
+                  'user_defined_symbols_file will be used.')
+        kwargs['user_defined_symbols'] = load_symbols(args.user_defined_symbols_file)
+
+    if args.required_chars_file is not None:
+        if args.required_chars is not None:
+            print('WARNING: required_chars_file and required_chars are both specified. '
+                  'required_chars_file will be used.')
+        kwargs['required_chars'] = load_symbols(args.required_chars_file)
+
+    # training process
     t1 = time.time()
     spm.SentencePieceTrainer.Train(**kwargs)
     print(f"Training time: {time.time() - t1:.2f} sec")
+
+    # evaluate the model
+    # TODO

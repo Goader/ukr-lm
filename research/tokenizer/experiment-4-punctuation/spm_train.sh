@@ -6,8 +6,9 @@
   --character-coverage=0.9995 \
   --input-sentence-size=10000000 \
   --num-threads=12 \
-  --user-defined-symbols-file=$DATA_DIR/user_defined_symbols.txt \
+  --user-defined-symbols="." \
   --byte-fallback=true |& tee "$DATA_DIR"/spm_train.log
+#  --user-defined-symbols-file=$DATA_DIR/user_defined_symbols.txt
 
 cp "$0" "$DATA_DIR"/spm_train.sh
 
