@@ -78,13 +78,12 @@ if __name__ == '__main__':
                              '["Hello", " ", "World"].')
 
     # special tokens and rules
-    # TODO add a handle for files to pass them as a list https://github.com/google/sentencepiece/issues/536
     parser.add_argument('--control-symbols', type=str, default='<cls>,<sep>,<mask>',
                         help='Special tokens that are used for control purposes, like BERT\'s [CLS] and [SEP]. '
                              'We only reserve ids for these tokens. Even if these tokens appear in the input text, '
                              'they are not handled as one token. User needs to insert ids explicitly after encoding.')
     parser.add_argument('--control-symbols-file', type=str, default=None,
-                        help='Load control symbols from file')
+                        help='Load control symbols from file, https://github.com/google/sentencepiece/issues/536')
     parser.add_argument('--user-defined-symbols', type=str, default=None,
                         help='Defines some custom pieces, which will get replaced during the training with special '
                              'token boundary, so that this pieces will never get split. When "@" is specified as user '
@@ -92,14 +91,14 @@ if __name__ == '__main__':
                              '"@" inside will not be extracted. Probably the name of "symbol" is misleading. The '
                              'intention is user-defined-piece.')
     parser.add_argument('--user-defined-symbols-file', type=str, default=None,
-                        help='Load user defined symbols from file')  # TODO it seems spm_train has this? https://github.com/google/sentencepiece/blob/8cbdf13794284c30877936f91c6f31e2c1d5aef7/src/spm_train_main.cc#L95C54-L95C54
+                        help='Load user defined symbols from file, https://github.com/google/sentencepiece/issues/536')
     parser.add_argument('--required-chars', type=str, default=None,
                         help='This option allows you to specify a list of characters that must be included in the '
                              'vocabulary. If a character is not included in the vocabulary, it will be treated as '
                              'an unknown character. This option is useful for languages that use a large number of '
                              'characters, such as Chinese, Japanese, and Korean.')
     parser.add_argument('--required-chars-file', type=str, default=None,
-                        help='Load required chars from file')
+                        help='Load required chars from file, https://github.com/google/sentencepiece/issues/536')
 
     # normalization options
     parser.add_argument('--byte-fallback', type=bool, default=False,
