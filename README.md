@@ -1,2 +1,1 @@
-# ukr-lm
-Master's Thesis about the Ukrainian Language Model
+# Ukrainian Language Models - Master's Thesis
