@@ -136,10 +136,12 @@ research/corpora/legal-corpus
 research/corpora/ubertext
 research/corpora/cc-100
 research/corpora/cc100
+research/corpora/treebank/*.conllu
+research/corpora/treebank/treebank.txt
 
 research/tokenizer/**.model
 research/tokenizer/**.vocab
 
 # large train files
 research/tokenizer/experiment-3-overall/train.txt
-research/tokenizer/experiment-5/train.txt
+research/tokenizer/experiment-5-overall-v2/train.txt
