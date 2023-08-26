@@ -4,9 +4,9 @@ learning_rate: 1e-4
 weight_decay: 0.01
 warmup_steps: 10000
 max_steps: 1000000
-batch_size: 32
 gradient_accumulation_steps: 1
+mlm_probability: 0.15
+pad_to_multiple_of: null
 # max_grad_norm: 1.0  # todo do we want to use gradient clipping?
-num_workers: 4
 fp16: true
 # fp16_opt_level: "O1"  # todo how do we use this?

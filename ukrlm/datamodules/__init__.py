@@ -1,2 +1,1 @@
-from .c4 import C4DataModule
-from .legal_corpus import LegalCorpusDataModule
+from .masked_language_modeling import MaskedLanguageModelingDataModule
