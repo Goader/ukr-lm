@@ -9,7 +9,6 @@ from pytorch_lightning.loggers import WandbLogger
 
 import torch
 
-from ukrlm.datamodules.c4 import C4DataModule
 from ukrlm.models.bert import BERT
 from ukrlm.tasks.masked_language_modeling import MaskedLanguageModelingTask
 

@@ -168,6 +168,3 @@ if __name__ == '__main__':
         print(f'  {ORANGE}Byte fallbacks:{RESET} {byte_fallbacks} - {byte_fallbacks / number_of_tokens:.2%}')
         print(f'  {ORANGE}Unknowns:{RESET} {unknowns} - {unknowns / number_of_tokens:.2%}')
         print()
-
-
-

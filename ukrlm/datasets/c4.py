@@ -1,10 +1,9 @@
 from omegaconf import DictConfig
 
-import torch
-import pytorch_lightning as pl
+from torch.utils.data import IterableDataset
 
 
-class C4DataModule(pl.LightningDataModule):
+class C4(IterableDataset):
     def __init__(self, cfg: DictConfig):
         super().__init__()
         self.cfg = cfg

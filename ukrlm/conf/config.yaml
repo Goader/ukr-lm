@@ -1,7 +1,11 @@
 stage: train
 seed: 0
+huggingface_cache_dir: null
 defaults:
-  - datamodule: c4
+  - datasets:
+      - cc100
+      - treebank
+  - datamodule: masked-language-modeling
   - model: bert-base
-  - task: language-modeling
+  - task: masked-language-modeling
   - _self_
