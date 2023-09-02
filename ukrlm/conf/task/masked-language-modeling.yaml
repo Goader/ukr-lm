@@ -8,5 +8,5 @@ gradient_accumulation_steps: 1
 mlm_probability: 0.15
 pad_to_multiple_of: null
 # max_grad_norm: 1.0  # todo do we want to use gradient clipping?
-fp16: true
+fp16: false  # todo change this to true, apparently it does not work on cpu
 # fp16_opt_level: "O1"  # todo how do we use this?

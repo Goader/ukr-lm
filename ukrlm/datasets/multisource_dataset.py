@@ -40,6 +40,8 @@ class MultiSourceDataset(IterableDataset):
         self.stopping_strategy = stopping_strategy
         self.overload = overload
 
+    # TODO we can aggregate column names / features just like in the Transformers library and add key to specify from
+    # TODO which dataset the instance came from
     def __iter__(self):
         dataset_names = list(self.datasets.keys())
         weights = [self.weights[name] for name in dataset_names]

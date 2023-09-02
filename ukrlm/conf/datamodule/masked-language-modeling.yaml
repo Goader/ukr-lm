@@ -1,7 +1,9 @@
+name: masked-language-modeling
 datasets:
   train:
     - cc100
   val:
-    - treebank
+    - cc100
 batch_size: 32
 num_workers: 4
+tokenizer_path: research/tokenizer/experiment-5-overall-v2

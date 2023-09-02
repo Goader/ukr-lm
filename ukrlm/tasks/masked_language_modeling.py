@@ -1,16 +1,9 @@
-from typing import Any
-
-import numpy as np
-import numpy.typing as npt
 from omegaconf import DictConfig
 
 import torch
 from torch import nn
-from torch.nn import functional as F
-from torchtyping import TensorType
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities import rank_zero_info
 
 
 class MaskedLanguageModelingTask(pl.LightningModule):
@@ -20,29 +13,52 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         model: nn.Module,
     ):
         super().__init__()
+        self.save_hyperparameters(cfg)
 
         self.cfg = cfg
         self.model = model
-        self.save_hyperparameters(cfg)
 
-        raise NotImplementedError()
+        self.loss = nn.CrossEntropyLoss()
+
+        # TODO how do we handle multiple objectives?
         # for objective in self.cfg.task.objectives: ...
 
     def training_step(self, batch, batch_idx):
-        raise NotImplementedError()
+        model_output = self.model(**batch)
+        loss = self.loss(model_output.logits.permute(0, 2, 1), batch['labels'])
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_perplexity', torch.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        raise NotImplementedError()
+        model_output = self.model(**batch)
+        loss = self.loss(model_output.logits.permute(0, 2, 1), batch['labels'])
+        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
 
     def test_step(self, batch, batch_idx):
-        raise NotImplementedError()
+        model_output = self.model(**batch)
+        loss = self.loss(model_output.logits.permute(0, 2, 1), batch['labels'])
+        self.log('test_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_perplexity', torch.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
 
     def configure_optimizers(self):
-        # TODO
-        raise NotImplementedError()
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.hparams.task.learning_rate,
             weight_decay=self.hparams.task.weight_decay
         )
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer=optimizer,
+            lr_lambda=lambda epoch: 1.0  # FIXME
+        )
+
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'interval': 'step',
+            }
+        }
