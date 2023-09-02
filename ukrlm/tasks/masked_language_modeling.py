@@ -5,6 +5,8 @@ from torch import nn
 
 import pytorch_lightning as pl
 
+from ukrlm.schedulers import instantiate_scheduler
+
 
 class MaskedLanguageModelingTask(pl.LightningModule):
     def __init__(
@@ -26,22 +28,22 @@ class MaskedLanguageModelingTask(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         model_output = self.model(**batch)
         loss = self.loss(model_output.logits.permute(0, 2, 1), batch['labels'])
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_perplexity', torch.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss, on_step=True, logger=True)
+        self.log('train_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         model_output = self.model(**batch)
         loss = self.loss(model_output.logits.permute(0, 2, 1), batch['labels'])
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_loss', loss, on_step=True, logger=True)
+        self.log('val_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
         return loss
 
     def test_step(self, batch, batch_idx):
         model_output = self.model(**batch)
         loss = self.loss(model_output.logits.permute(0, 2, 1), batch['labels'])
-        self.log('test_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test_perplexity', torch.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_loss', loss, on_step=True, logger=True)
+        self.log('test_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
         return loss
 
     def configure_optimizers(self):
@@ -50,10 +52,7 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             lr=self.hparams.task.learning_rate,
             weight_decay=self.hparams.task.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.LambdaLR(
-            optimizer=optimizer,
-            lr_lambda=lambda epoch: 1.0  # FIXME
-        )
+        scheduler = instantiate_scheduler(optimizer, self.cfg)
 
         return {
             'optimizer': optimizer,

@@ -8,4 +8,5 @@ defaults:
   - datamodule: masked-language-modeling
   - model: bert-base
   - task: masked-language-modeling
+  - scheduler: linear-with-warmup
   - _self_

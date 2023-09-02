@@ -1,0 +1,3 @@
+name: 'linear-with-warmup'
+warmup_steps: 10000
+t_total: null  # null means that it will be equal to max_steps
