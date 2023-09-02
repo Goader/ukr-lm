@@ -90,7 +90,7 @@ def main(cfg: DictConfig):
             datamodule = MaskedLanguageModelingDataModule(cfg)
         case _:
             raise ValueError(
-                'unknown datamodule, can be either `c64` or ...'
+                'unknown datamodule, can be either `masked-language-modeling` or ...'
             )
 
     match cfg.model.name:
