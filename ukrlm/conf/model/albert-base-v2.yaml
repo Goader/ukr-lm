@@ -1,4 +1,4 @@
-name: "bert-base"
+name: "albert-base-v2"
 checkpoint_path: null
 max_position_embeddings: 512
 vocab_size: 32000
