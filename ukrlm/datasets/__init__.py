@@ -16,6 +16,14 @@ def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDat
             cache_dir=cfg.huggingface_cache_dir,
             # TODO add more options: num_proc?
         )
+    elif name == 'treebank-lm':
+        return load_dataset(
+            path='Goader/ukrainian-treebank-lm',
+            split='train',
+            streaming=cfg.datasets.treebank_lm.streaming,
+            cache_dir=cfg.huggingface_cache_dir,
+            # TODO add more options: num_proc?
+        )
     else:
         raise ValueError(f'Unknown dataset name: {name}')
 
