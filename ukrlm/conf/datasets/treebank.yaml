@@ -1,2 +1,3 @@
 treebank:
   name: "treebank"
+  streaming: true
