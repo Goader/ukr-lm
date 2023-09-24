@@ -1,7 +1,7 @@
 from omegaconf import DictConfig
 
 import torch
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 
 from datasets import IterableDataset, IterableDatasetDict
