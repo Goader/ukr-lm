@@ -4,8 +4,8 @@ import hydra
 import matplotlib.pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import WandbLogger
 
 import torch
 from transformers import AutoModelForMaskedLM, AutoConfig
@@ -39,19 +39,18 @@ def train(
     trainer = pl.Trainer(
         logger=wandb_logger,
         callbacks=[checkpoint_callback],
-        overfit_batches=4,  # TODO remove, only for debugging
-        # fast_dev_run=True,  # TODO remove, only for debugging
+        # overfit_batches=4,
+        # fast_dev_run=True,
         max_steps=cfg.task.max_steps,
         # max_time=   # TODO this maybe better for Athena with 24h limit
-        val_check_interval=1.0,  # TODO move to config
-        # val_check_interval=25_000,  # TODO move to config
+        # val_check_interval=1.0,  # TODO move to config
+        val_check_interval=25_000,  # TODO move to config
         log_every_n_steps=200,  # TODO move to config
-        # accelerator='
+        accelerator=cfg.accelerator,
         # strategy=
         # sync_batchnorm=  # TODO what is this?
         precision=16 if cfg.task.fp16 else 32,
         enable_model_summary=True,
-        resume_from_checkpoint=cfg.model.checkpoint_path,
     )
     # if no checkpoint_path is passed, then it is None, thus the model will start from the very beginning
     trainer.fit(task, datamodule=datamodule, ckpt_path=cfg.model.checkpoint_path)

@@ -1,5 +1,5 @@
-import pytorch_lightning as pl
-from pytorch_lightning.utilities import rank_zero_info
+import lightning.pytorch as pl
+from lightning.pytorch.utilities import rank_zero_info
 
 
 class MetricsLoggingCallback(pl.Callback):

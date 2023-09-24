@@ -3,7 +3,7 @@ from omegaconf import DictConfig
 import torch
 from torch import nn
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 
 from ukrlm.schedulers import instantiate_scheduler
 

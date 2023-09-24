@@ -1,5 +1,6 @@
 stage: train
 seed: 0
+accelerator: cpu
 huggingface_cache_dir: null
 defaults:
   - datasets:

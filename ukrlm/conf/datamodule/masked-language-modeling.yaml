@@ -3,7 +3,7 @@ datasets:
   train:
     - cc100
   val:
-    - treebank-lm
+    - treebank
 batch_size: 32
 num_workers: 4
 tokenizer_path: research/tokenizer/experiment-5-overall-v2
