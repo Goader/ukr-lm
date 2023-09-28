@@ -50,6 +50,8 @@ def train(
         # strategy=
         # sync_batchnorm=  # TODO what is this?
         precision=16 if cfg.task.fp16 else 32,
+        gradient_clip_val=cfg.task.gradient_clip_val,
+        gradient_clip_algorithm=cfg.task.gradient_clip_algorithm,
         enable_model_summary=True,
     )
     # if no checkpoint_path is passed, then it is None, thus the model will start from the very beginning
