@@ -9,6 +9,7 @@ from lightning.pytorch.loggers import WandbLogger
 
 import torch
 from transformers import AutoModelForMaskedLM, AutoConfig
+from transformers.models.bert.modeling_bert import BertForMaskedLM
 
 from ukrlm.models.bert import BERT
 from ukrlm.datamodules import MaskedLanguageModelingDataModule
@@ -26,9 +27,10 @@ def train(
 
     # TODO add metrics writing to the checkpoint??
     wandb_logger = WandbLogger(project='ukr-lm')
+    # TODO should we create a specific ModelCheckpoint callback for transformers models?
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath='output/checkpoints',  # TODO move to config
-        filename=f'{cfg.model.name}_step{{step}}_perplexity{{perplexity:.3f}}',  # TODO move to config
+        filename=f'{cfg.model.name}_step{{step}}_perplexity{{train_perplexity:.3f}}',  # TODO move to config
         save_last=True,
         save_top_k=-1,
         auto_insert_metric_name=False,
@@ -106,7 +108,8 @@ def main(cfg: DictConfig):
                 sep_token_id=3,
                 mask_token_id=4,
             )
-            model = AutoModelForMaskedLM.from_config(config)
+            model: BertForMaskedLM = AutoModelForMaskedLM.from_config(config)
+            model = model.to_bettertransformer()  # using flash attention
             print('Embeddings shape', model.get_input_embeddings().weight.size())
         case 'albert-base-v2':
             config = AutoConfig.from_pretrained(
