@@ -10,3 +10,4 @@ datasets==2.14.5
 matplotlib==3.7.1
 wandb==0.15.11
 torchmetrics==1.2.0
+optimum==1.13.2
