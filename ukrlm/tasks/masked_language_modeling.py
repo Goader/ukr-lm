@@ -38,6 +38,8 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         loss = model_output.loss
         logits = model_output.logits
 
+        # TODO how do I do this only for steps, which are logged?
+        # TODO torch.no_grad()?
         flattened_shape = (-1, logits.size()[-1])
         mlm_accuracy = self.mlm_accuracy(logits.view(*flattened_shape), batch['labels'].view(-1))
 
