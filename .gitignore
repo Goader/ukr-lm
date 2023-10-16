@@ -150,3 +150,6 @@ research/tokenizer/**.vocab
 # large train files
 research/tokenizer/experiment-3-overall/train.txt
 research/tokenizer/experiment-5-overall-v2/train.txt
+
+# benchmark data files
+benchmarks/ukrainian-news-classification/**/*.csv
