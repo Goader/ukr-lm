@@ -27,5 +27,6 @@ def load_ckpt(path: str) -> BertForMaskedLM:
         mask_token_id=4,
     )
     model: BertForMaskedLM = AutoModelForMaskedLM.from_config(config)
-    model.load_state_dict(ckpt['state_dict'])
+    state_dict = {k.removeprefix('model.'): v for k, v in ckpt['state_dict'].items()}
+    model.load_state_dict(state_dict)
     return model

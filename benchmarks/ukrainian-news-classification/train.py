@@ -2,7 +2,8 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import torch
-from transformers import TrainingArguments, Trainer, AutoModelForSequenceClassification
+import numpy as np
+from transformers import TrainingArguments, Trainer, AutoModelForSequenceClassification, DataCollatorWithPadding
 from transformers.models.bert.modeling_bert import BertForSequenceClassification, BertForMaskedLM
 from datasets import load_dataset
 from sklearn.metrics import f1_score, accuracy_score
@@ -16,8 +17,10 @@ DEFAULT_TOKENIZER_PATH = \
 
 
 def convert_model(model: BertForMaskedLM) -> BertForSequenceClassification:
+    model.config.num_labels = 7
     clf = AutoModelForSequenceClassification.from_config(model.config)
-    clf.bert = model.bert
+    clf.bert.embeddings.load_state_dict(model.bert.embeddings.state_dict())
+    clf.bert.encoder.load_state_dict(model.bert.encoder.state_dict())
     return clf
 
 
@@ -37,24 +40,37 @@ if __name__ == '__main__':
 
     dataset = load_dataset(
         'csv',
-        data_files={'train': args.train_data, 'validation': args.val_data, 'test': args.test_data},
+        data_files={
+            'train': args.train_data,
+            'validation': args.val_data,
+            'test': args.test_data
+        },
     )
 
     def concatenate_title_and_text(example):
         return {
-            'id': example['id'],
+            'id': example['Id'],
             'text': example['title'] + '. ' + example['text'],
             'label': example['source'],
         }
 
-    dataset.map(concatenate_title_and_text)
+    dataset = dataset.map(concatenate_title_and_text)
+
+    def tokenize(batch):
+        return tokenizer(
+            batch['text'],
+            padding='max_length',
+            truncation=True,
+            max_length=512,
+            return_tensors='pt'
+        ) | {'label': batch['label']}
+
+    dataset = dataset.map(tokenize, batched=True, batch_size=256)
+    collator = DataCollatorWithPadding(tokenizer)
 
     def compute_metrics(eval_pred):
-        predictions, labels = eval_pred
-        predictions = torch.argmax(predictions, dim=-1)
-
-        predictions = predictions.cpu().numpy()
-        labels = labels.cpu().numpy()
+        logits, labels = eval_pred
+        predictions = np.argmax(logits, axis=-1)
 
         return {
             'accuracy': accuracy_score(labels, predictions),
@@ -66,6 +82,7 @@ if __name__ == '__main__':
         args=TrainingArguments(
             output_dir='models',
             evaluation_strategy='epoch',
+            save_strategy='epoch',
             learning_rate=2e-5,
             per_device_train_batch_size=16,
             per_device_eval_batch_size=16,
@@ -78,6 +95,7 @@ if __name__ == '__main__':
         eval_dataset=dataset['validation'],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
+        data_collator=collator,
     )
 
     trainer.train()
