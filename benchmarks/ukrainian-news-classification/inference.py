@@ -27,7 +27,9 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     args = parser.parse_args()
 
-    model = AutoModelForSequenceClassification.from_pretrained(args.checkpoint)
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+    model = AutoModelForSequenceClassification.from_pretrained(args.checkpoint).to(device)
     tokenizer = LibertaTokenizer(args.tokenizer)
 
     dataset = load_dataset(
@@ -59,7 +61,7 @@ if __name__ == '__main__':
 
     model.eval()
     with open(args.output, 'w') as f:
-        writer = csv.DictWriter(f, fieldnames=['Id','Predicted'])
+        writer = csv.DictWriter(f, fieldnames=['Id', 'Predicted'])
         for input in tqdm.tqdm(dataset.iter(
                 batch_size=args.batch_size,
                 drop_last_batch=False
@@ -71,10 +73,13 @@ if __name__ == '__main__':
                 'attention_mask': input['attention_mask']
             })
 
-            with torch.no_grad():
-                logits = model(**input).logits
+            input_ids = input['input_ids'].to(device)
+            attention_mask = input['attention_mask'].to(device)
 
-            predicted_class_ids = logits.argmax(dim=-1)
+            with torch.no_grad():
+                logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
+
+            predicted_class_ids = logits.argmax(dim=-1).detach().cpu().numpy()
 
             for document_id, predicted_class_id in zip(document_ids, predicted_class_ids):
                 writer.writerow({'Id': document_id, 'Predicted': predicted_class_id})
