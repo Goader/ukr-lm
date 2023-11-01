@@ -83,3 +83,4 @@ if __name__ == '__main__':
 
             for document_id, predicted_class_id in zip(document_ids, predicted_class_ids):
                 writer.writerow({'Id': document_id, 'Predicted': predicted_class_id})
+
