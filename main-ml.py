@@ -51,7 +51,7 @@ def train(
         accelerator=cfg.accelerator,
         # strategy=
         # sync_batchnorm=  # TODO what is this?
-        precision=16 if cfg.task.fp16 else 32,
+        precision=cfg.task.precision,
         gradient_clip_val=cfg.task.gradient_clip_val,
         gradient_clip_algorithm=cfg.task.gradient_clip_algorithm,
         enable_model_summary=True,
