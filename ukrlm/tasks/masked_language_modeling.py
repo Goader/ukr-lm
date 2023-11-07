@@ -33,19 +33,24 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         # TODO how do we handle multiple objectives?
         # for objective in self.cfg.task.objectives: ...
 
+    def _mlm_accuracy(self, logits, labels) -> float:
+        with torch.no_grad():
+            flattened_shape = (-1, logits.size()[-1])
+            mlm_accuracy = self.mlm_accuracy(logits.view(*flattened_shape), labels.view(-1))
+            return mlm_accuracy
+
     def training_step(self, batch, batch_idx):
         model_output = self.model(**batch)
         loss = model_output.loss
         logits = model_output.logits
 
-        # TODO how do I do this only for steps, which are logged?
-        # TODO torch.no_grad()?
-        flattened_shape = (-1, logits.size()[-1])
-        mlm_accuracy = self.mlm_accuracy(logits.view(*flattened_shape), batch['labels'].view(-1))
+        # optimizes by not computing accuracy on every step, but only on log_every_n_steps
+        if (self.trainer.global_step + 1) % self.trainer.log_every_n_steps == 0:
+            mlm_accuracy = self._mlm_accuracy(logits, batch['labels'])
+            self.log('train_loss', loss, on_step=True, logger=True)
+            self.log('train_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
+            self.log('train_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
 
-        self.log('train_loss', loss, on_step=True, logger=True)
-        self.log('train_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
-        self.log('train_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -53,12 +58,11 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         loss = model_output.loss
         logits = model_output.logits
 
-        flattened_shape = (-1, logits.size()[-1])
-        mlm_accuracy = self.mlm_accuracy(logits.view(*flattened_shape), batch['labels'].view(-1))
+        mlm_accuracy = self._mlm_accuracy(logits, batch['labels'])
 
-        self.log('val_loss', loss, on_step=True, logger=True)
-        self.log('val_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
-        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True)
+        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, logger=True)
+        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -66,12 +70,11 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         loss = model_output.loss
         logits = model_output.logits
 
-        flattened_shape = (-1, logits.size()[-1])
-        mlm_accuracy = self.mlm_accuracy(logits.view(*flattened_shape), batch['labels'].view(-1))
+        mlm_accuracy = self._mlm_accuracy(logits, batch['labels'])
 
-        self.log('test_loss', loss, on_step=True, logger=True)
-        self.log('test_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
-        self.log('test_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True)
+        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, logger=True)
+        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def configure_optimizers(self):
