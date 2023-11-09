@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 from omegaconf import DictConfig
 
 import torch
@@ -6,6 +8,7 @@ from torch import nn
 import lightning.pytorch as pl
 from lightning.pytorch.utilities import rank_zero_info
 from torchmetrics.classification import MulticlassAccuracy
+from transformers import AutoModelForMaskedLM
 
 from ukrlm.schedulers import instantiate_scheduler
 
@@ -92,3 +95,17 @@ class MaskedLanguageModelingTask(pl.LightningModule):
                 'interval': 'step',
             }
         }
+
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        reversed = self.model.reverse_bettertransformer()
+        checkpoint['state_dict'] = reversed.state_dict()
+        checkpoint['config'] = reversed.config
+
+
+    # TODO does this work? implement this
+    # def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+    #     config = checkpoint['config']
+    #     model = AutoModelForMaskedLM.from_config(config)
+    #     model.load_state_dict(checkpoint['state_dict'])
+    #     model = model.to_bettertransformer()
+    #     # FIXME this should be a class method

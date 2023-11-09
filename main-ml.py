@@ -30,7 +30,8 @@ def train(
     # TODO should we create a specific ModelCheckpoint callback for transformers models?
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath='output/checkpoints',  # TODO move to config
-        filename=f'{cfg.model.name}_step{{step}}_perplexity{{train_perplexity:.3f}}',  # TODO move to config
+        # TODO move to config (should we?)
+        filename=f'{wandb_logger.experiment.name}_{cfg.model.name}_step{{step}}_perplexity{{train_perplexity:.3f}}',
         save_last=True,
         save_top_k=-1,
         auto_insert_metric_name=False,
