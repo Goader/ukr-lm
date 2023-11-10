@@ -15,18 +15,7 @@ def load_ckpt(path: str) -> BertForMaskedLM:
 
     ckpt = torch.load(path, map_location='cpu')
 
-    # TODO read config somehow from the CKPT file
-    config = AutoConfig.from_pretrained(
-        'bert-base-uncased',
-        max_position_embeddings=512,
-        vocab_size=32000,
-        pad_token_id=0,
-        unk_token_id=1,
-        cls_token_id=2,
-        sep_token_id=3,
-        mask_token_id=4,
-    )
+    config = ckpt['config']
     model: BertForMaskedLM = AutoModelForMaskedLM.from_config(config)
-    state_dict = {k.removeprefix('model.'): v for k, v in ckpt['state_dict'].items()}
-    model.load_state_dict(state_dict)
+    model.load_state_dict(ckpt['state_dict'])
     return model
