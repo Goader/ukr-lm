@@ -59,7 +59,7 @@ if __name__ == '__main__':
     def tokenize(batch):
         return tokenizer(
             batch['text'],
-            padding='max_length',
+            padding='longest',
             truncation=True,
             max_length=512,
             return_tensors='pt'
