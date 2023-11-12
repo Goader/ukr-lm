@@ -50,7 +50,8 @@ def train(
         val_check_interval=25_000,  # TODO move to config
         log_every_n_steps=200,  # TODO move to config
         accelerator=cfg.accelerator,
-        # strategy=
+        devices=cfg.devices,
+        strategy=cfg.task.strategy,
         # sync_batchnorm=  # TODO what is this?
         precision=cfg.task.precision,
         gradient_clip_val=cfg.task.gradient_clip_val,

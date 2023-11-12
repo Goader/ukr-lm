@@ -8,6 +8,7 @@ gradient_clip_val: 1.0
 gradient_clip_algorithm: "norm"
 mlm_probability: 0.15
 pad_to_multiple_of: null
+strategy: "ddp"
 # max_grad_norm: 1.0  # todo do we want to use gradient clipping?
 precision: bf16-mixed
 # fp16_opt_level: "O1"  # todo how do we use this?
