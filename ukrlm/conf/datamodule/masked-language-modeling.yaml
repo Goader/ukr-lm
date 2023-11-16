@@ -6,4 +6,5 @@ datasets:
     - treebank
 batch_size: 96
 num_workers: 4
+pin_memory: false
 tokenizer_path: research/tokenizer/experiment-5-overall-v2

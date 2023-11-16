@@ -8,21 +8,27 @@ def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDat
     if name == 'c4':
         raise NotImplementedError('C4 dataset is not yet implemented')
     elif name == 'cc100':
-        return load_dataset(
+        dataset = load_dataset(
             path='cc100',
             lang='uk',
             split='train',
             streaming=cfg.datasets.cc100.streaming,
+            keep_in_memory=cfg.datasets.cc100.keep_in_memory,
             cache_dir=cfg.huggingface_cache_dir,
-            # TODO add more options: num_proc?
+            num_proc=cfg.datamodule.num_workers,
         )
+        if not cfg.datasets.cc100.streaming:
+            # TODO what is an optimal number of shards?
+            dataset = dataset.to_iterable_dataset(num_shards=cfg.datasets.cc100.num_shards)
+        return dataset
     elif name == 'treebank':
         return load_dataset(
             path='Goader/ukrainian-treebank-lm',
             split='train',
             streaming=cfg.datasets.treebank.streaming,
+            keep_in_memory=cfg.datasets.treebank.keep_in_memory,
             cache_dir=cfg.huggingface_cache_dir,
-            # TODO add more options: num_proc?
+            num_proc=cfg.datamodule.num_workers,
         )
     else:
         raise ValueError(f'Unknown dataset name: {name}')

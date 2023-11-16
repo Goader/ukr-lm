@@ -47,9 +47,10 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         # FIXME update the function and should we split long sentences?
         def tokenize_function(examples):
             return self.tokenizer(
-                examples["text"],
+                examples['text'],
                 max_length=512,
                 truncation=True,
+                padding='longest',
                 return_special_tokens_mask=True,
             )
 
@@ -61,7 +62,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 tokenize_function,
                 batched=True,
                 batch_size=1000,
-                remove_columns=dataset.column_names,  # FIXME is it ok?
+                remove_columns=dataset.column_names,
             )
 
         for name, dataset in list(self.val_datasets.items()):
@@ -69,7 +70,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 tokenize_function,
                 batched=True,
                 batch_size=1000,
-                remove_columns=dataset.column_names,  # FIXME is it ok?
+                remove_columns=dataset.column_names,
             )
 
     def train_dataloader(self):
@@ -82,6 +83,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         return DataLoader(dataset=dataset,
                           batch_size=self.cfg.datamodule.batch_size,
                           num_workers=self.cfg.datamodule.num_workers,
+                          pin_memory=self.cfg.datamodule.pin_memory,
                           collate_fn=self.collator)
 
     def val_dataloader(self):
@@ -92,6 +94,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             name: DataLoader(dataset=dataset,
                              batch_size=self.cfg.datamodule.batch_size,
                              num_workers=self.cfg.datamodule.num_workers,
+                             pin_memory=self.cfg.datamodule.pin_memory,
                              collate_fn=self.collator)
             for name, dataset in self.val_datasets.items()
         }
