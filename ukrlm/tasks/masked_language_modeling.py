@@ -97,9 +97,10 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         }
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        reversed = self.model.reverse_bettertransformer()
-        checkpoint['state_dict'] = reversed.state_dict()
-        checkpoint['config'] = reversed.config
+        checkpoint['config'] = self.model.config
+        if self.cfg.task.use_flash_attention:
+            reversed = self.model.reverse_bettertransformer()
+            checkpoint['state_dict'] = reversed.state_dict()
 
 
     # TODO does this work? implement this
