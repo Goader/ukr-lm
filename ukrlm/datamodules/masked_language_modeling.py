@@ -50,7 +50,6 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 examples['text'],
                 max_length=512,
                 truncation=True,
-                padding='longest',
                 return_special_tokens_mask=True,
             )
 
@@ -61,7 +60,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             self.train_datasets[name] = dataset.map(
                 tokenize_function,
                 batched=True,
-                batch_size=1000,
+                batch_size=256,
                 remove_columns=dataset.column_names,
             )
 
@@ -69,7 +68,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             self.val_datasets[name] = dataset.map(
                 tokenize_function,
                 batched=True,
-                batch_size=1000,
+                batch_size=256,
                 remove_columns=dataset.column_names,
             )
 

@@ -4,6 +4,7 @@ accelerator: cpu
 devices: -1
 huggingface_cache_dir: null
 checkpoint_output_dir: output/checkpoints
+profiler: null
 defaults:
   - datasets:
       - cc100
