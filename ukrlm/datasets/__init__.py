@@ -15,7 +15,7 @@ def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDat
             streaming=cfg.datasets.cc100.streaming,
             keep_in_memory=cfg.datasets.cc100.keep_in_memory,
             cache_dir=cfg.huggingface_cache_dir,
-            num_proc=cfg.datamodule.num_workers,
+            num_proc=cfg.datamodule.num_workers if not cfg.datasets.cc100.streaming else None,
         )
         if not cfg.datasets.cc100.streaming:
             # TODO what is an optimal number of shards?
@@ -28,7 +28,7 @@ def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDat
             streaming=cfg.datasets.treebank.streaming,
             keep_in_memory=cfg.datasets.treebank.keep_in_memory,
             cache_dir=cfg.huggingface_cache_dir,
-            num_proc=cfg.datamodule.num_workers,
+            num_proc=cfg.datamodule.num_workers if not cfg.datasets.treebank.streaming else None,
         )
     else:
         raise ValueError(f'Unknown dataset name: {name}')

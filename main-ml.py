@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 
 import lightning.pytorch as pl
+from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.loggers import WandbLogger
 
 import torch
@@ -37,10 +38,11 @@ def train(
         every_n_train_steps=cfg.task.save_every_n_steps,
         # train_time_interval=  # TODO should we use it instead of every_n_train_steps?
     )
-    # TODO add gradient accumulation parameters
     trainer = pl.Trainer(
         logger=wandb_logger,
         callbacks=[checkpoint_callback],
+        plugins=[SLURMEnvironment(auto_requeue=False)],
+        profiler=cfg.profiler,
         # overfit_batches=4,
         # fast_dev_run=True,
         max_steps=cfg.task.max_steps,
