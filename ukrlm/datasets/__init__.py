@@ -1,10 +1,11 @@
-from datasets import IterableDataset, IterableDatasetDict, load_dataset
+from datasets import IterableDataset, IterableDatasetDict, load_dataset, Value
+from datasets.distributed import split_dataset_by_node
 from omegaconf import DictConfig
 
 from .multisource_dataset import MultiSourceDataset
 
 
-def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDatasetDict:
+def dataset_by_name(name: str, cfg: DictConfig, rank: int, word_size: int) -> IterableDataset | IterableDatasetDict:
     if name == 'c4':
         raise NotImplementedError('C4 dataset is not yet implemented')
     elif name == 'cc100':
@@ -17,9 +18,14 @@ def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDat
             cache_dir=cfg.huggingface_cache_dir,
             num_proc=cfg.datamodule.num_workers if not cfg.datasets.cc100.streaming else None,
         )
+
         if not cfg.datasets.cc100.streaming:
             # TODO what is an optimal number of shards?
             dataset = dataset.to_iterable_dataset(num_shards=cfg.datasets.cc100.num_shards)
+
+        dataset = split_dataset_by_node(dataset, rank, word_size)
+        dataset = dataset.cast_column('id', Value('int64'))
+
         return dataset
     elif name == 'treebank':
         return load_dataset(
@@ -34,8 +40,13 @@ def dataset_by_name(name: str, cfg: DictConfig) -> IterableDataset | IterableDat
         raise ValueError(f'Unknown dataset name: {name}')
 
 
-def instantiate_datasets(datasets: list[str], cfg: DictConfig) -> dict[str, IterableDataset | IterableDatasetDict]:
+def instantiate_datasets(
+        datasets: list[str],
+        cfg: DictConfig,
+        rank: int,
+        word_size: int
+) -> dict[str, IterableDataset | IterableDatasetDict]:
     return {
-        name: dataset_by_name(name, cfg)
+        name: dataset_by_name(name, cfg, rank, word_size)
         for name in datasets
     }

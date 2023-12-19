@@ -41,8 +41,9 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             pad_to_multiple_of=self.cfg.task.pad_to_multiple_of
         )
 
-        self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, self.cfg)
-        self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, self.cfg)
+        args = (self.cfg, self.trainer.global_rank, self.trainer.world_size)
+        self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, *args)
+        self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, *args)
 
         # FIXME update the function and should we split long sentences?
         def tokenize_function(examples):
@@ -61,7 +62,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 tokenize_function,
                 batched=True,
                 batch_size=256,
-                remove_columns=dataset.column_names,
+                remove_columns=['text'],
             )
 
         for name, dataset in list(self.val_datasets.items()):
