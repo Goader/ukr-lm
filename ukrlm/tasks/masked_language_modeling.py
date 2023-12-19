@@ -44,7 +44,8 @@ class MaskedLanguageModelingTask(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         batch_ids = batch['id']
-        # print(f'global_rank: {self.global_rank}, global_step: {self.global_step}, batch_ids: {batch_ids}')
+        if self.trainer.global_step < self.trainer.log_every_n_steps + 1:
+            print(f'global_rank: {self.global_rank}, global_step: {self.global_step}, batch_ids: {batch_ids}')
         del batch['id']
 
         model_output = self.model(**batch)
@@ -59,7 +60,6 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             self.log('train_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
 
             # print(self.global_rank)
-            print(f'batch_ids[0]-global_rank-{self.global_rank}')
             self.log(f'batch_ids[0]-global_rank-{self.global_rank}', batch_ids[0],
                      on_step=True, logger=True, on_epoch=False)
 
