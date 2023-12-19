@@ -43,16 +43,25 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             return mlm_accuracy
 
     def training_step(self, batch, batch_idx):
+        batch_ids = batch['id']
+        # print(f'global_rank: {self.global_rank}, global_step: {self.global_step}, batch_ids: {batch_ids}')
+        del batch['id']
+
         model_output = self.model(**batch)
         loss = model_output.loss
         logits = model_output.logits
 
-        # optimizes by not computing accuracy on every step, but only on log_every_n_steps
+        # optimizes by not computing accuracy in every step, but only in log_every_n_steps
         if (self.trainer.global_step + 1) % self.trainer.log_every_n_steps == 0:
             mlm_accuracy = self._mlm_accuracy(logits, batch['labels'])
             self.log('train_loss', loss, on_step=True, logger=True)
             self.log('train_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
             self.log('train_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
+
+            # print(self.global_rank)
+            print(f'batch_ids[0]-global_rank-{self.global_rank}')
+            self.log(f'batch_ids[0]-global_rank-{self.global_rank}', batch_ids[0],
+                     on_step=True, logger=True, on_epoch=False)
 
         return loss
 
@@ -63,9 +72,9 @@ class MaskedLanguageModelingTask(pl.LightningModule):
 
         mlm_accuracy = self._mlm_accuracy(logits, batch['labels'])
 
-        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True)
-        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, logger=True)
-        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, on_epoch=True, logger=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -75,9 +84,9 @@ class MaskedLanguageModelingTask(pl.LightningModule):
 
         mlm_accuracy = self._mlm_accuracy(logits, batch['labels'])
 
-        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True)
-        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, logger=True)
-        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, on_epoch=True, logger=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        self.log('val_perplexity', torch.exp(loss), on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        self.log('val_mlm_accuracy', mlm_accuracy, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         return loss
 
     def configure_optimizers(self):

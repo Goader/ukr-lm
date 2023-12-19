@@ -24,8 +24,6 @@ def train(
     datamodule: pl.LightningDataModule,
     task: pl.LightningModule
 ):
-    datamodule.setup()  # FIXME should it be here?
-
     # TODO add metrics writing to the checkpoint??
     wandb_logger = WandbLogger(project='ukr-lm')
     # TODO should we create a specific ModelCheckpoint callback for transformers models?
@@ -36,7 +34,6 @@ def train(
         save_top_k=-1,
         auto_insert_metric_name=False,
         every_n_train_steps=cfg.task.save_every_n_steps,
-        # train_time_interval=  # TODO should we use it instead of every_n_train_steps?
     )
     trainer = pl.Trainer(
         logger=wandb_logger,
@@ -46,7 +43,6 @@ def train(
         # overfit_batches=4,
         # fast_dev_run=True,
         max_steps=cfg.task.max_steps,
-        # max_time=   # TODO this maybe better for Athena with 24h limit
         val_check_interval=cfg.task.val_check_interval,
         log_every_n_steps=cfg.task.log_every_n_steps,
         accelerator=cfg.accelerator,
