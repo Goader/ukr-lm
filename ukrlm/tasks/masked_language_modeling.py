@@ -59,7 +59,7 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             self.log('train_perplexity', torch.exp(loss), on_step=True, prog_bar=True, logger=True)
             self.log('train_mlm_accuracy', mlm_accuracy, on_step=True, prog_bar=False, logger=True)
 
-            # print(self.global_rank)
+            # wandb logs only for the main process, we need grouping to log for all processes
             self.log(f'batch_ids[0]-global_rank-{self.global_rank}', batch_ids[0],
                      on_step=True, logger=True, on_epoch=False)
 
