@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from pathlib import Path
+from typing import Optional
 
 import torch
 import evaluate
@@ -17,11 +18,11 @@ DEFAULT_TOKENIZER_PATH = \
     Path(__file__).parent.parent.parent / 'research' / 'tokenizer' / 'experiment-5-overall-v2' / 'spm.model'
 
 
-def load_huggingface_dataset(dataset_name: str) -> DatasetDict | Dataset | IterableDatasetDict | IterableDataset:
+def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None) -> DatasetDict | Dataset | IterableDatasetDict | IterableDataset:
     if dataset_name == 'wikiann':
-        dataset = load_dataset('wikiann', 'uk')
+        dataset = load_dataset('wikiann', 'uk', cache_dir=cache_dir)
     elif dataset_name == 'ner-uk':
-        dataset = load_dataset('benjamin/ner-uk')
+        dataset = load_dataset('benjamin/ner-uk', cache_dir=cache_dir)
     else:
         raise ValueError(f'unknown dataset for this script - {dataset_name}')
     return dataset
@@ -74,6 +75,7 @@ if __name__ == '__main__':
     parser.add_argument('--tokenizer', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
     parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk'],
                         required=True, help='name of the dataset to train on')
+    parser.add_argument('--cache_dir', type=str, default=None, help='Huggingface cache directory')
     args = parser.parse_args()
 
     dataset = load_huggingface_dataset(args.dataset)
@@ -126,9 +128,9 @@ if __name__ == '__main__':
             evaluation_strategy='epoch',
             save_strategy='epoch',
             learning_rate=2e-5,
-            per_device_train_batch_size=16,
-            per_device_eval_batch_size=16,
-            num_train_epochs=3,
+            per_device_train_batch_size=32,
+            per_device_eval_batch_size=32,
+            num_train_epochs=10,
             weight_decay=0.01,
             load_best_model_at_end=True,
             metric_for_best_model='overall_f1',
@@ -141,5 +143,7 @@ if __name__ == '__main__':
     )
 
     trainer.train()
+
+    print('Evaluating on test dataset')
     trainer.evaluate(dataset['test'])
     trainer.save_model('model')
