@@ -42,6 +42,7 @@ def train(
         profiler=cfg.profiler,
         # overfit_batches=4,
         # fast_dev_run=True,
+        max_epochs=cfg.task.max_epochs,
         max_steps=cfg.task.max_steps,
         val_check_interval=cfg.task.val_check_interval,
         log_every_n_steps=cfg.task.log_every_n_steps,
@@ -108,6 +109,21 @@ def main(cfg: DictConfig):
                 mask_token_id=cfg.model.mask_token_id,
             )
             model: BertForMaskedLM = AutoModelForMaskedLM.from_config(config)
+            if cfg.task.use_flash_attention:
+                model = model.to_bettertransformer()
+            print('Embeddings shape', model.get_input_embeddings().weight.size())
+        case 'bert-large':
+            config = AutoConfig.from_pretrained(
+                'bert-large-uncased',
+                max_position_embeddings=cfg.model.max_position_embeddings,
+                vocab_size=cfg.model.vocab_size,
+                pad_token_id=cfg.model.pad_token_id,
+                unk_token_id=cfg.model.unk_token_id,
+                cls_token_id=cfg.model.cls_token_id,
+                sep_token_id=cfg.model.sep_token_id,
+                mask_token_id=cfg.model.mask_token_id,
+            )
+            model = AutoModelForMaskedLM.from_config(config)
             if cfg.task.use_flash_attention:
                 model = model.to_bettertransformer()
             print('Embeddings shape', model.get_input_embeddings().weight.size())
