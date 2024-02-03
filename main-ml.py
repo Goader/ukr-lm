@@ -35,9 +35,13 @@ def train(
         auto_insert_metric_name=False,
         every_n_train_steps=cfg.task.save_every_n_steps,
     )
+    learning_rate_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
     trainer = pl.Trainer(
         logger=wandb_logger,
-        callbacks=[checkpoint_callback],
+        callbacks=[
+            checkpoint_callback,
+            learning_rate_monitor,
+        ],
         plugins=[SLURMEnvironment(auto_requeue=False)],
         profiler=cfg.profiler,
         # overfit_batches=4,

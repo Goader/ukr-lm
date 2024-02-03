@@ -41,7 +41,8 @@ class WarmupLinearSchedule(LambdaLR):
     def lr_lambda(self, step):
         if step < self.warmup_steps:
             return float(step) / float(max(1, self.warmup_steps))
-        return max(0.0, float(self.t_total - step) / float(max(1.0, self.t_total - self.warmup_steps)))
+        progress = float(step - self.warmup_steps) / float(max(1, self.t_total - self.warmup_steps))
+        return max(0.0, 1.0 - progress)
 
 
 class WarmupCosineSchedule(LambdaLR):
@@ -92,8 +93,14 @@ def instantiate_scheduler(optimizer: Optimizer, cfg: DictConfig) -> LambdaLR:
     elif cfg.scheduler.name == 'constant-with-warmup':
         return WarmupConstantSchedule(optimizer, cfg.scheduler.warmup_steps)
     elif cfg.scheduler.name == 'linear-with-warmup':
-        t_total = cfg.scheduler.t_total if cfg.scheduler.t_total is not None else cfg.task.max_steps
+        t_total = cfg.scheduler.t_total if cfg.scheduler.t_total is not None else cfg.task.max_steps  # FIXME how do we infer max_steps if it is not set?
+        if t_total <= 0:
+            raise ValueError(f'Invalid t_total: {t_total}')
         return WarmupLinearSchedule(optimizer, cfg.scheduler.warmup_steps, t_total)
-    # TODO add more schedulers
+    elif cfg.scheduler.name == 'cosine-with-warmup':
+        t_total = cfg.scheduler.t_total if cfg.scheduler.t_total is not None else cfg.task.max_steps  # FIXME same
+        if t_total <= 0:
+            raise ValueError(f'Invalid t_total: {t_total}')
+        return WarmupCosineSchedule(optimizer, cfg.scheduler.warmup_steps, t_total, cfg.scheduler.cycles)
     else:
         raise ValueError(f'Unknown scheduler: {cfg.scheduler.name}')

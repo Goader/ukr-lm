@@ -1,0 +1,4 @@
+name: 'cosine-with-warmup'
+warmup_steps: 10000
+cycles: 0.5
+t_total: null  # null means that it will be equal to max_steps
