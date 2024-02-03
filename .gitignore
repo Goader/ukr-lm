@@ -155,3 +155,7 @@ research/tokenizer/experiment-5-overall-v2/train.txt
 benchmarks/ukrainian-news-classification/**/*.csv
 benchmarks/ukrainian-news-classification/models
 benchmarks/ukrainian-news-classification/data
+
+benchmarks/ner/model/
+benchmarks/ner/models
+benchmarks/ukrainian-news-classification/model/
