@@ -9,7 +9,7 @@ from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.loggers import WandbLogger
 
 import torch
-from transformers import AutoModelForMaskedLM, AutoConfig
+from transformers import AutoModelForMaskedLM, AutoConfig, AutoModel
 from transformers.models.bert.modeling_bert import BertForMaskedLM
 
 from ukrlm.models.bert import BERT
@@ -146,6 +146,9 @@ def main(cfg: DictConfig):
             print('Embeddings shape', model.get_input_embeddings().weight.size())
         case 'liberta-base':
             raise NotImplementedError()
+        case 'deberta-v3-base':
+            model = ...
+            print('Embeddings shape', model.get_input_embeddings().weight.size())
         case _:
             raise ValueError(
                 'unknown model, can be either `bert-base` or ...'

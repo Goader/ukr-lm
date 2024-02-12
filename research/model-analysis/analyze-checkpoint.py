@@ -23,16 +23,7 @@ if __name__ == '__main__':
     ckpt = torch.load(args.checkpoint, map_location='cpu')
     state_dict = {key.removeprefix('model.'): value for key, value in ckpt['state_dict'].items()}
 
-    config = AutoConfig.from_pretrained(
-        'bert-base-uncased',
-        max_position_embeddings=512,
-        vocab_size=32000,
-        pad_token_id=0,
-        unk_token_id=1,
-        cls_token_id=2,
-        sep_token_id=3,
-        mask_token_id=4,
-    )
+    config = ckpt['config']
 
     model = AutoModelForMaskedLM.from_config(config)
     model.load_state_dict(state_dict)
