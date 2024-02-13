@@ -23,6 +23,9 @@ def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None)
         dataset = load_dataset('wikiann', 'uk', cache_dir=cache_dir)
     elif dataset_name == 'ner-uk':
         dataset = load_dataset('benjamin/ner-uk', cache_dir=cache_dir)
+    elif dataset_name == 'universal-dependencies':
+        dataset = load_dataset('universal_dependencies', 'uk_iu', cache_dir=cache_dir)
+        dataset = dataset.map(lambda x: {'tokens': x['tokens'], 'ner_tags': x['upos']})
     else:
         raise ValueError(f'unknown dataset for this script - {dataset_name}')
     return dataset
@@ -120,6 +123,8 @@ if __name__ == '__main__':
         all_metrics = metric.compute(predictions=true_predictions, references=true_labels)
         return all_metrics
 
+    main_metric = 'overall_accuracy' if args.dataset in ['universal-dependencies'] else 'overall_f1'
+
     trainer = Trainer(
         model=model,
         args=TrainingArguments(
@@ -132,7 +137,7 @@ if __name__ == '__main__':
             num_train_epochs=5,
             weight_decay=0.01,
             load_best_model_at_end=True,
-            metric_for_best_model='overall_f1',
+            metric_for_best_model=main_metric,
         ),
         train_dataset=dataset['train'],
         eval_dataset=dataset['validation'],
