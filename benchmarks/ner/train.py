@@ -25,7 +25,7 @@ def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None)
         dataset = load_dataset('benjamin/ner-uk', cache_dir=cache_dir)
     elif dataset_name == 'universal-dependencies':
         dataset = load_dataset('universal_dependencies', 'uk_iu', cache_dir=cache_dir)
-        dataset = dataset.map(lambda x: {'tokens': x['tokens'], 'ner_tags': x['upos']})
+        dataset = dataset.rename_column('upos', 'ner_tags')
     else:
         raise ValueError(f'unknown dataset for this script - {dataset_name}')
     return dataset
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--checkpoint', type=str, required=True, help='path to the CKPT file')
     parser.add_argument('--tokenizer', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
-    parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk'],
+    parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk', 'universal-dependencies'],
                         required=True, help='name of the dataset to train on')
     args = parser.parse_args()
 
