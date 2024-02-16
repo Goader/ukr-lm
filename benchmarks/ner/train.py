@@ -25,14 +25,15 @@ def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None)
         dataset = load_dataset('benjamin/ner-uk', cache_dir=cache_dir)
     elif dataset_name == 'universal-dependencies':
         dataset = load_dataset('universal_dependencies', 'uk_iu', cache_dir=cache_dir)
-        dataset = dataset.rename_column('upos', 'ner_tags')
+        dataset = dataset.rename_column('upos', 'pos_tags')
     else:
         raise ValueError(f'unknown dataset for this script - {dataset_name}')
     return dataset
 
 
-def convert_model(model: BertForMaskedLM, num_labels: int) -> BertForTokenClassification:
+def convert_model(model: BertForMaskedLM, num_labels: int, finetuning_task: str) -> BertForTokenClassification:
     model.config.num_labels = num_labels
+    model.config.finetuning_task = finetuning_task
     clf = AutoModelForTokenClassification.from_config(model.config)
     clf.bert.embeddings.load_state_dict(model.bert.embeddings.state_dict())
     clf.bert.encoder.load_state_dict(model.bert.encoder.state_dict())
@@ -49,7 +50,7 @@ def collect_word_ids(seq: list[str], tokenizer) -> list[int]:
     return word_ids
 
 
-def align_labels_with_tokens(labels, word_ids):
+def align_labels_with_tokens(labels, word_ids, task='ner'):
     new_labels = []
     current_word = None
     for word_id in word_ids:
@@ -62,12 +63,15 @@ def align_labels_with_tokens(labels, word_ids):
             # Special token
             new_labels.append(-100)
         else:
-            # Same word as previous token
-            label = labels[word_id]
-            # If the label is B-XXX we change it to I-XXX
-            if label % 2 == 1:
-                label += 1
-            new_labels.append(label)
+            if task == 'ner':
+                # Same word as previous token
+                label = labels[word_id]
+                # If the label is B-XXX we change it to I-XXX
+                if label % 2 == 1:
+                    label += 1
+                new_labels.append(label)
+            else:  # task == 'pos'
+                new_labels.append(-100)
 
     return new_labels
 
@@ -81,10 +85,17 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     dataset = load_huggingface_dataset(args.dataset)
-    label_names = dataset['train'].features['ner_tags'].feature.names
+    label_column_name = 'ner_tags' if args.dataset in ['wikiann', 'ner-uk'] else 'pos_tags'
+    label_names = dataset['train'].features[label_column_name].feature.names
+    finetuning_task = 'pos' if args.dataset in ['universal-dependencies'] else 'ner'
 
     model = load_ckpt(args.checkpoint)
-    model = convert_model(model, num_labels=dataset['train'].features['ner_tags'].feature.num_classes)
+    model = convert_model(model, num_labels=dataset['train'].features[label_column_name].feature.num_classes, finetuning_task=finetuning_task)
+
+
+    print(label_names)
+    print(dataset['train'].features[label_column_name].feature.num_classes)
+    print(model)
 
     tokenizer = LibertaTokenizer(args.tokenizer)
 
@@ -97,11 +108,11 @@ if __name__ == '__main__':
             max_length=512,
             return_tensors='pt'
         )
-        all_labels = examples["ner_tags"]
+        all_labels = examples[label_column_name]
         new_labels = []
         for i, (seq, labels) in enumerate(zip(examples['tokens'], all_labels)):
             word_ids = collect_word_ids(seq, tokenizer)
-            new_labels.append(align_labels_with_tokens(labels, word_ids))
+            new_labels.append(align_labels_with_tokens(labels, word_ids, task=finetuning_task))
 
         tokenized_inputs["labels"] = new_labels
         return tokenized_inputs
@@ -136,7 +147,7 @@ if __name__ == '__main__':
             per_device_eval_batch_size=16,
             num_train_epochs=5,
             weight_decay=0.01,
-            load_best_model_at_end=True,
+            load_best_model_at_end=False,
             metric_for_best_model=main_metric,
         ),
         train_dataset=dataset['train'],
