@@ -12,7 +12,6 @@ import torch
 from transformers import AutoModelForMaskedLM, AutoConfig, AutoModel
 from transformers.models.bert.modeling_bert import BertForMaskedLM
 
-from ukrlm.models.bert import BERT
 from ukrlm.datamodules import MaskedLanguageModelingDataModule
 from ukrlm.tasks.masked_language_modeling import MaskedLanguageModelingTask
 
@@ -147,6 +146,7 @@ def main(cfg: DictConfig):
         case 'liberta-base':
             raise NotImplementedError()
         case 'deberta-v3-base':
+            raise NotImplementedError()
             model = ...
             print('Embeddings shape', model.get_input_embeddings().weight.size())
         case _:
