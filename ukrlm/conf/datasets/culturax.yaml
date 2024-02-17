@@ -1,0 +1,5 @@
+culturax:
+  name: "culturax"
+  streaming: true
+  num_shards: 96
+  keep_in_memory: false

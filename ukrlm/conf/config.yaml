@@ -8,6 +8,7 @@ profiler: null
 defaults:
   - datasets:
       - cc100
+      - culturax
       - treebank
   - datamodule: masked-language-modeling
   - model: bert-base

@@ -1,11 +1,11 @@
-from datasets import IterableDataset, IterableDatasetDict, load_dataset, Value
+from datasets import IterableDataset, IterableDatasetDict, load_dataset, Value, Features
 from datasets.distributed import split_dataset_by_node
 from omegaconf import DictConfig
 
 from .multisource_dataset import MultiSourceDataset
 
 
-def dataset_by_name(name: str, cfg: DictConfig, rank: int, word_size: int) -> IterableDataset | IterableDatasetDict:
+def dataset_by_name(name: str, cfg: DictConfig, rank: int, world_size: int) -> IterableDataset | IterableDatasetDict:
     if name == 'c4':
         raise NotImplementedError('C4 dataset is not yet implemented')
     elif name == 'cc100':
@@ -23,8 +23,40 @@ def dataset_by_name(name: str, cfg: DictConfig, rank: int, word_size: int) -> It
             # TODO what is an optimal number of shards?
             dataset = dataset.to_iterable_dataset(num_shards=cfg.datasets.cc100.num_shards)
 
-        dataset = split_dataset_by_node(dataset, rank, word_size)
+        dataset = split_dataset_by_node(dataset, rank, world_size)
         dataset = dataset.cast_column('id', Value('int64'))
+
+        return dataset
+    elif name == 'culturax':
+        dataset = load_dataset(
+            path='uonlp/CulturaX',
+            name='uk',
+            split='train',
+            streaming=cfg.datasets.culturax.streaming,
+            keep_in_memory=cfg.datasets.culturax.keep_in_memory,
+            cache_dir=cfg.huggingface_cache_dir,
+            num_proc=cfg.datamodule.num_workers if not cfg.datasets.culturax.streaming else None,
+            use_auth_token=True,
+        )
+
+        if not cfg.datasets.culturax.streaming:
+            dataset = dataset.to_iterable_dataset(num_shards=cfg.datasets.culturax.num_shards)
+
+        dataset = split_dataset_by_node(dataset, rank, world_size)
+
+        def zip_with_index(examples: list[dict], indices: list[int], rank: int = 0, world_size: int = 1):
+            examples['id'] = [i * world_size + rank for i in indices]
+            return examples
+
+        dataset = dataset.map(
+            zip_with_index,
+            with_indices=True,
+            batched=True,
+            batch_size=256,
+            remove_columns=['timestamp', 'url', 'source'],
+            features=Features({'id': Value('int64'), 'text': Value('string')}),
+            fn_kwargs={'rank': rank, 'world_size': world_size}
+        )
 
         return dataset
     elif name == 'treebank':
