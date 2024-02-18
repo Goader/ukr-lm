@@ -1,5 +1,4 @@
 name: "masked-language-modeling"
-objectives: ["masked-lm", "next-sentence-prediction"]  # TODO dummy values so far // where do we store objectives configuration?
 learning_rate: 1e-4
 weight_decay: 0.01
 max_epochs: 1

@@ -47,16 +47,34 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, *args)
         self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, *args)
 
-        # FIXME update the function and should we split long sentences?
         def tokenize_function(examples):
-            return self.tokenizer(
+            output = self.tokenizer(
                 examples['text'],
-                max_length=512,
-                truncation=True,
                 return_special_tokens_mask=True,
             )
 
-        # FIXME what with distributed training? how should we handle it?
+            outputs = {
+                'id': [],
+                'input_ids': [],
+                'attention_mask': [],
+                'special_tokens_mask': [],
+            }
+
+            # splitting into multiple examples if the input is too long
+            for doc_idx in range(len(examples['text'])):
+                doc_id = examples['id'][doc_idx]
+                input_ids = output['input_ids'][doc_idx]
+                attention_mask = output['attention_mask'][doc_idx]
+                special_tokens_mask = output['special_tokens_mask'][doc_idx]
+
+                max_length = self.cfg.model.max_position_embeddings
+                for i in range(0, len(input_ids), max_length):
+                    outputs['id'].append(doc_id)
+                    outputs['input_ids'].append(input_ids[i:i + max_length])
+                    outputs['attention_mask'].append(attention_mask[i:i + max_length])
+                    outputs['special_tokens_mask'].append(special_tokens_mask[i:i + max_length])
+
+            return outputs
 
         # FIXME should we do it after interleaving?
         for name, dataset in list(self.train_datasets.items()):
@@ -67,13 +85,14 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 remove_columns=['text'],
             )
 
+        # FIXME is this properly distributed?
         for name, dataset in list(self.val_datasets.items()):
             self.val_datasets[name] = dataset.map(
                 tokenize_function,
                 batched=True,
                 batch_size=256,
                 remove_columns=dataset.column_names,
-            )
+            ).remove_columns(['id'])  # FIXME we could replace removal with proper integer IDs
 
     def train_dataloader(self):
         if not self.tokenizer or not self.collator:

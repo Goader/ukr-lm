@@ -60,7 +60,7 @@ def dataset_by_name(name: str, cfg: DictConfig, rank: int, world_size: int) -> I
 
         return dataset
     elif name == 'treebank':
-        return load_dataset(
+        dataset = load_dataset(
             path='Goader/ukrainian-treebank-lm',
             split='train',
             streaming=cfg.datasets.treebank.streaming,
@@ -68,6 +68,8 @@ def dataset_by_name(name: str, cfg: DictConfig, rank: int, world_size: int) -> I
             cache_dir=cfg.huggingface_cache_dir,
             num_proc=cfg.datamodule.num_workers if not cfg.datasets.treebank.streaming else None,
         )
+        dataset = dataset.rename_column('document_id', 'id')
+        return dataset
     else:
         raise ValueError(f'Unknown dataset name: {name}')
 

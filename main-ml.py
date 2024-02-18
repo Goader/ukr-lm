@@ -23,9 +23,7 @@ def train(
     datamodule: pl.LightningDataModule,
     task: pl.LightningModule
 ):
-    # TODO add metrics writing to the checkpoint??
     wandb_logger = WandbLogger(project='ukr-lm')
-    # TODO should we create a specific ModelCheckpoint callback for transformers models?
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=cfg.checkpoint_output_dir,
         filename=f'{wandb_logger.experiment.name}_{cfg.model.name}_step{{step}}_perplexity{{train_perplexity:.3f}}',
@@ -131,18 +129,19 @@ def main(cfg: DictConfig):
                 model = model.to_bettertransformer()
             print('Embeddings shape', model.get_input_embeddings().weight.size())
         case 'albert-base-v2':
-            config = AutoConfig.from_pretrained(
-                'albert-base-v2',
-                max_position_embeddings=cfg.model.max_position_embeddings,
-                vocab_size=cfg.model.vocab_size,
-                pad_token_id=cfg.model.pad_token_id,
-                unk_token_id=cfg.model.unk_token_id,
-                cls_token_id=cfg.model.cls_token_id,
-                sep_token_id=cfg.model.sep_token_id,
-                mask_token_id=cfg.model.mask_token_id,
-            )
-            model = AutoModelForMaskedLM.from_config(config)
-            print('Embeddings shape', model.get_input_embeddings().weight.size())
+            raise NotImplementedError()
+            # config = AutoConfig.from_pretrained(
+            #     'albert-base-v2',
+            #     max_position_embeddings=cfg.model.max_position_embeddings,
+            #     vocab_size=cfg.model.vocab_size,
+            #     pad_token_id=cfg.model.pad_token_id,
+            #     unk_token_id=cfg.model.unk_token_id,
+            #     cls_token_id=cfg.model.cls_token_id,
+            #     sep_token_id=cfg.model.sep_token_id,
+            #     mask_token_id=cfg.model.mask_token_id,
+            # )
+            # model = AutoModelForMaskedLM.from_config(config)
+            # print('Embeddings shape', model.get_input_embeddings().weight.size())
         case 'liberta-base':
             raise NotImplementedError()
         case 'deberta-v3-base':
@@ -151,20 +150,16 @@ def main(cfg: DictConfig):
             print('Embeddings shape', model.get_input_embeddings().weight.size())
         case _:
             raise ValueError(
-                'unknown model, can be either `bert-base` or ...'
+                'unknown model, can be either `bert-base` or `bert-large` or ...'
             )
 
     match cfg.task.name:
         case 'masked-language-modeling':
             task = MaskedLanguageModelingTask(cfg, model)
-        # case 'text-classification':
-        #     task = TextClassificationTask(cfg, model)
-        # case 'token-classification':
-        #     task = TokenClassificationTask(cfg, model)
+        # TODO add replaced token detection task
         case _:
             raise ValueError(
-                'unknown task, can be either `masked-language-modeling`, `text-classification`, `token-classification`'
-                ' or ...'
+                'unknown task, can be either `masked-language-modeling` or ...'
             )
 
     match cfg.stage:

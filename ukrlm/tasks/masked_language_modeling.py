@@ -33,9 +33,6 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             validate_args=True,
         )
 
-        # TODO how do we handle multiple objectives?
-        # for objective in self.cfg.task.objectives: ...
-
     def _mlm_accuracy(self, logits, labels) -> float:
         with torch.no_grad():
             flattened_shape = (-1, logits.size()[-1])
@@ -108,14 +105,12 @@ class MaskedLanguageModelingTask(pl.LightningModule):
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         checkpoint['config'] = self.model.config
         if self.cfg.task.use_flash_attention:
-            reversed = self.model.reverse_bettertransformer()
-            checkpoint['state_dict'] = reversed.state_dict()
+            self.model = self.model.reverse_bettertransformer()
+            checkpoint['state_dict'] = self.state_dict()
+            self.model = self.model.to_bettertransformer()
 
-
-    # TODO does this work? implement this
-    # def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-    #     config = checkpoint['config']
-    #     model = AutoModelForMaskedLM.from_config(config)
-    #     model.load_state_dict(checkpoint['state_dict'])
-    #     model = model.to_bettertransformer()
-    #     # FIXME this should be a class method
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        if self.cfg.task.use_flash_attention:
+            self.model = self.model.reverse_bettertransformer()
+            self.load_state_dict(checkpoint['state_dict'])
+            self.model = self.model.to_bettertransformer()
