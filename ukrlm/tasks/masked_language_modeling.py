@@ -105,10 +105,21 @@ class MaskedLanguageModelingTask(pl.LightningModule):
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         checkpoint['config'] = self.model.config
         if self.cfg.task.use_flash_attention:
-            self.model = self.model.reverse_bettertransformer()
-            checkpoint['state_dict'] = self.state_dict()
-            self.model = self.model.to_bettertransformer()
+            reversed_model = self.model.reverse_bettertransformer()
 
+            state_dict = self.state_dict()
+            model_state_dict = reversed_model.state_dict()
+            model_state_dict = {'model.' + k: p for k, p in model_state_dict.items()}
+
+            for k, p in state_dict.items():
+                if k.startswith('model.'):
+                    del state_dict[k]
+
+            state_dict.update(model_state_dict)
+
+            checkpoint['state_dict'] = state_dict
+
+    # FIXME this likely won't work due to the new model being created and the optimizer not following the params
     def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         if self.cfg.task.use_flash_attention:
             self.model = self.model.reverse_bettertransformer()
