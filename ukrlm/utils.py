@@ -15,7 +15,7 @@ def load_ckpt(path: str) -> BertForMaskedLM:
 
     ckpt = torch.load(path, map_location='cpu')
 
-    config = ckpt['config']
+    config = ckpt['huggingface_config']
     model: BertForMaskedLM = AutoModelForMaskedLM.from_config(config)
     model = model.to_bettertransformer()
 
