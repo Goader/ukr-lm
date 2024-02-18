@@ -103,4 +103,4 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         }
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        checkpoint['config'] = self.model.config
+        checkpoint['huggingface_config'] = self.model.config
