@@ -17,5 +17,12 @@ def load_ckpt(path: str) -> BertForMaskedLM:
 
     config = ckpt['config']
     model: BertForMaskedLM = AutoModelForMaskedLM.from_config(config)
-    model.load_state_dict(ckpt['state_dict'])
+
+    model_state_dict = {
+        k.removeprefix('model.'): p
+        for k, p in ckpt['state_dict'].items()
+        if k.startswith('model.')
+    }
+
+    model.load_state_dict(model_state_dict)
     return model
