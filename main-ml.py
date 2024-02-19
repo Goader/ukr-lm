@@ -24,6 +24,7 @@ def train(
     task: pl.LightningModule
 ):
     wandb_logger = WandbLogger(project='ukr-lm')
+    print(wandb_logger.experiment.id)
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=cfg.checkpoint_output_dir,
         filename=f'{wandb_logger.experiment.name}_{cfg.model.name}_step{{step}}_perplexity{{train_perplexity:.3f}}',

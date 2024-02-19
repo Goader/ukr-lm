@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Any
 
 from omegaconf import DictConfig
 
@@ -120,3 +121,16 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             for name, dataset in self.val_datasets.items()
         }
         return list(dataloaders.values())[0]  # FIXME temporary solution
+
+    # FIXME this won't work for multiple train datasets, at least with custom MultiSource dataset,
+    # FIXME how do we get the real step from the dataset itself?
+    def state_dict(self) -> Dict[str, Any]:
+        effective_batch_size_per_device = self.cfg.datamodule.batch_size * self.cfg.task.gradient_accumulation_steps
+        elements_passed = self.trainer.global_step * effective_batch_size_per_device
+        return {
+            'elements_passed': elements_passed,
+        }
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        for dataset in self.train_datasets.values():
+            dataset.skip(state_dict['elements_passed'])
