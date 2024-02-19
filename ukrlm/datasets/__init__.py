@@ -2,7 +2,9 @@ from datasets import IterableDataset, IterableDatasetDict, load_dataset, Value, 
 from datasets.distributed import split_dataset_by_node
 from omegaconf import DictConfig
 
+from .examples_passed_counter_dataset import ExamplesPassedCounterDataset
 from .multisource_dataset import MultiSourceDataset
+from .skip_examples_dataset import SkipExamplesDataset
 
 
 def dataset_by_name(name: str, cfg: DictConfig, rank: int, world_size: int) -> IterableDataset | IterableDatasetDict:

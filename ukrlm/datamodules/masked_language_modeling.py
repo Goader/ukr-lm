@@ -5,9 +5,8 @@ from omegaconf import DictConfig
 
 import torch
 import lightning.pytorch as pl
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, IterableDataset
 
-from datasets import IterableDataset, IterableDatasetDict
 from transformers import (
     AutoTokenizer,
     PreTrainedTokenizerBase,
@@ -15,7 +14,12 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 
-from ukrlm.datasets import MultiSourceDataset, instantiate_datasets
+from ukrlm.datasets import (
+    MultiSourceDataset,
+    SkipExamplesDataset,
+    ExamplesPassedCounterDataset,
+    instantiate_datasets,
+)
 from ukrlm.tokenizers import LibertaTokenizer
 
 
@@ -24,11 +28,14 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         super().__init__()
         self.cfg = cfg
 
-        self.train_datasets: dict[str, IterableDataset | IterableDatasetDict] = dict()
-        self.val_datasets: dict[str, IterableDataset | IterableDatasetDict] = dict()
+        self.train_datasets: dict[str, IterableDataset] = dict()
+        self.val_datasets: dict[str, IterableDataset] = dict()
 
         self.tokenizer: PreTrainedTokenizerBase | None = None
         self.collator: DataCollator | None = None
+
+        self.examples_passed_counter_per_dataset: dict[str, ExamplesPassedCounterDataset] = dict()
+        self.skip_train_examples_per_dataset: dict[str, int] = dict()
 
     def prepare_data(self) -> None:
         # AutoTokenizer.from_pretrained(self.cfg.model.name)  # FIXME tokenizer is not yet on huggingface hub
@@ -48,6 +55,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, *args)
         self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, *args)
 
+        # FIXME first token for second chunk is not CLS
         def tokenize_function(examples):
             output = self.tokenizer(
                 examples['text'],
@@ -77,14 +85,23 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
 
             return outputs
 
-        # FIXME should we do it after interleaving?
         for name, dataset in list(self.train_datasets.items()):
-            self.train_datasets[name] = dataset.map(
+            mapped_dataset = dataset.map(
                 tokenize_function,
                 batched=True,
                 batch_size=256,
                 remove_columns=['text'],
             )
+
+            examples_passed_counter_dataset = ExamplesPassedCounterDataset(mapped_dataset)
+            self.examples_passed_counter_per_dataset[name] = examples_passed_counter_dataset
+
+            skip_examples_dataset = SkipExamplesDataset(
+                examples_passed_counter_dataset,
+                self.skip_train_examples_per_dataset.get(name, 0),
+            )
+
+            self.train_datasets[name] = skip_examples_dataset
 
         # FIXME is this properly distributed?
         for name, dataset in list(self.val_datasets.items()):
@@ -102,6 +119,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         # FIXME temporary weights since we have only one dataset for now
         dataset = MultiSourceDataset(datasets=self.train_datasets,
                                      weights=dict.fromkeys(self.train_datasets.keys(), 1.0))
+
         return DataLoader(dataset=dataset,
                           batch_size=self.cfg.datamodule.batch_size,
                           num_workers=self.cfg.datamodule.num_workers,
@@ -122,15 +140,16 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         }
         return list(dataloaders.values())[0]  # FIXME temporary solution
 
-    # FIXME this won't work for multiple train datasets, at least with custom MultiSource dataset,
-    # FIXME how do we get the real step from the dataset itself?
     def state_dict(self) -> Dict[str, Any]:
-        effective_batch_size_per_device = self.cfg.datamodule.batch_size * self.cfg.task.gradient_accumulation_steps
-        elements_passed = self.trainer.global_step * effective_batch_size_per_device
+        examples_passed_per_dataset = {
+            name: dataset.examples_passed
+            for name, dataset in self.examples_passed_counter_per_dataset.items()
+        }
         return {
-            'elements_passed': elements_passed,
+            'examples_passed_per_dataset': examples_passed_per_dataset,
+            'skipped_train_examples_per_dataset': self.skip_train_examples_per_dataset,
         }
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-        for dataset in self.train_datasets.values():
-            dataset.skip(state_dict['elements_passed'])
+        # skipping all examples that have already been passed in previous runs
+        self.skip_train_examples_per_dataset = state_dict['examples_passed_per_dataset']
