@@ -5,6 +5,7 @@ from omegaconf import DictConfig
 
 import torch
 import lightning.pytorch as pl
+from lightning.pytorch.utilities import rank_zero_info
 from torch.utils.data import DataLoader, IterableDataset
 
 from transformers import (
@@ -141,6 +142,16 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         return list(dataloaders.values())[0]  # FIXME temporary solution
 
     def state_dict(self) -> Dict[str, Any]:
+        """
+        Returns the state of the datamodule as a dictionary.
+
+        Note: the number of examples passed is describing the post-processed examples, and we are not skipping
+        real documents, but post-processed examples as well. Thus, we can save this number only for a single process
+        and then broadcast it to all other processes, when loading the state.
+
+        :return: dictionary with the state of the datamodule
+        """
+
         examples_passed_per_dataset = {
             name: dataset.examples_passed
             for name, dataset in self.examples_passed_counter_per_dataset.items()
@@ -153,3 +164,6 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         # skipping all examples that have already been passed in previous runs
         self.skip_train_examples_per_dataset = state_dict['examples_passed_per_dataset']
+
+        # logging
+        rank_zero_info(f"Skipping {self.skip_train_examples_per_dataset} examples per dataset")
