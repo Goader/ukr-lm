@@ -33,6 +33,8 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             validate_args=True,
         )
 
+        self.local_step = 0
+
     def _mlm_accuracy(self, logits, labels) -> float:
         with torch.no_grad():
             flattened_shape = (-1, logits.size()[-1])
@@ -41,8 +43,13 @@ class MaskedLanguageModelingTask(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         batch_ids = batch['id']
-        if self.trainer.global_step < self.trainer.log_every_n_steps + 1:
+        if min(self.trainer.global_step, self.local_step) < self.trainer.log_every_n_steps + 1:
             print(f'global_rank: {self.global_rank}, global_step: {self.global_step}, batch_ids: {batch_ids}')
+
+            if min(self.trainer.global_step, self.local_step) < 10:
+                print(f'global_rank: {self.global_rank}, input_ids: {batch["input_ids"][:5, :10]}')
+
+            self.local_step += 1  # we do not need to increment it any further after initial logging
         del batch['id']
 
         model_output = self.model(**batch)
@@ -104,3 +111,6 @@ class MaskedLanguageModelingTask(pl.LightningModule):
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         checkpoint['huggingface_config'] = self.model.config
+
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        self.local_step = 0
