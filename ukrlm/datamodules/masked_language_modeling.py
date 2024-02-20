@@ -56,7 +56,6 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, *args)
         self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, *args)
 
-        # FIXME first token for second chunk is not CLS
         def tokenize_function(examples):
             output = self.tokenizer(
                 examples['text'],
@@ -73,16 +72,20 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             # splitting into multiple examples if the input is too long
             for doc_idx in range(len(examples['text'])):
                 doc_id = examples['id'][doc_idx]
-                input_ids = output['input_ids'][doc_idx]
-                attention_mask = output['attention_mask'][doc_idx]
-                special_tokens_mask = output['special_tokens_mask'][doc_idx]
+                input_ids = output['input_ids'][doc_idx][1:-1]  # removing CLS and SEP
+                attention_mask = output['attention_mask'][doc_idx][1:-1]  # same
+                special_tokens_mask = output['special_tokens_mask'][doc_idx][1:-1]  # same
 
-                max_length = self.cfg.model.max_position_embeddings
+                max_length = self.cfg.model.max_position_embeddings - 2  # for CLS and SEP
                 for i in range(0, len(input_ids), max_length):
                     outputs['id'].append(doc_id)
-                    outputs['input_ids'].append(input_ids[i:i + max_length])
-                    outputs['attention_mask'].append(attention_mask[i:i + max_length])
-                    outputs['special_tokens_mask'].append(special_tokens_mask[i:i + max_length])
+                    outputs['input_ids'].append([
+                        self.tokenizer.cls_token_id,
+                        *input_ids[i:i + max_length],
+                        self.tokenizer.sep_token_id
+                    ])
+                    outputs['attention_mask'].append([1, *attention_mask[i:i + max_length], 1])
+                    outputs['special_tokens_mask'].append([1, *special_tokens_mask[i:i + max_length], 1])
 
             return outputs
 
@@ -97,12 +100,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             examples_passed_counter_dataset = ExamplesPassedCounterDataset(mapped_dataset)
             self.examples_passed_counter_per_dataset[name] = examples_passed_counter_dataset
 
-            skip_examples_dataset = SkipExamplesDataset(
-                examples_passed_counter_dataset,
-                self.skip_train_examples_per_dataset.get(name, 0),
-            )
-
-            self.train_datasets[name] = skip_examples_dataset
+            self.train_datasets[name] = examples_passed_counter_dataset
 
         # FIXME is this properly distributed?
         for name, dataset in list(self.val_datasets.items()):
@@ -164,6 +162,11 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         # skipping all examples that have already been passed in previous runs
         self.skip_train_examples_per_dataset = state_dict['examples_passed_per_dataset']
+        for name, dataset in self.train_datasets.items():
+            self.train_datasets[name] = SkipExamplesDataset(
+                dataset,
+                self.skip_train_examples_per_dataset.get(name, 0)
+            )
 
         # logging
         rank_zero_info(f"Skipping {self.skip_train_examples_per_dataset} examples per dataset")
