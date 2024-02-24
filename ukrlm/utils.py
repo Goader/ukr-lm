@@ -25,7 +25,7 @@ def load_ckpt(path: str) -> BertForMaskedLM:
         if k.startswith('model.')
     }
 
+    model.load_state_dict(model_state_dict)
     model = model.reverse_bettertransformer()
 
-    model.load_state_dict(model_state_dict)
     return model
