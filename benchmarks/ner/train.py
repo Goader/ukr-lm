@@ -82,6 +82,13 @@ if __name__ == '__main__':
     parser.add_argument('--tokenizer', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
     parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk', 'universal-dependencies'],
                         required=True, help='name of the dataset to train on')
+    parser.add_argument('--epochs', type=int, default=5, help='number of epochs to train the model')
+    parser.add_argument('--batch_size', type=int, default=16, help='batch size for training and evaluation')
+    parser.add_argument('--eval_batch_size', type=int, default=16, help='batch size for evaluation only')
+    parser.add_argument('--learning_rate', type=float, default=2e-5, help='learning rate for the optimizer')
+    parser.add_argument('--scheduler_type', type=str, default='linear', help='type of the learning rate scheduler')
+    parser.add_argument('--warmup_ratio', type=float, default=0.0, help='warmup ratio for the learning rate scheduler')
+    parser.add_argument('--weight_decay', type=float, default=0.01, help='weight decay for the optimizer')
     args = parser.parse_args()
 
     dataset = load_huggingface_dataset(args.dataset)
@@ -91,7 +98,6 @@ if __name__ == '__main__':
 
     model = load_ckpt(args.checkpoint)
     model = convert_model(model, num_labels=dataset['train'].features[label_column_name].feature.num_classes, finetuning_task=finetuning_task)
-
 
     print(label_names)
     print(dataset['train'].features[label_column_name].feature.num_classes)
@@ -142,13 +148,15 @@ if __name__ == '__main__':
             output_dir='models',
             evaluation_strategy='epoch',
             save_strategy='epoch',
-            learning_rate=2e-5,
-            per_device_train_batch_size=16,
-            per_device_eval_batch_size=16,
-            num_train_epochs=5,
-            weight_decay=0.01,
+            learning_rate=args.learning_rate,
+            per_device_train_batch_size=args.batch_size,
+            per_device_eval_batch_size=args.eval_batch_size,
+            num_train_epochs=args.epochs,
+            weight_decay=args.weight_decay,
             load_best_model_at_end=False,
             metric_for_best_model=main_metric,
+            lr_scheduler_type=args.scheduler_type,
+            warmup_ratio=args.warmup_ratio,
         ),
         train_dataset=dataset['train'],
         eval_dataset=dataset['validation'],
