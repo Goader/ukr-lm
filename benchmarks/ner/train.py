@@ -5,7 +5,13 @@ from typing import Optional
 import torch
 import evaluate
 import numpy as np
-from transformers import TrainingArguments, Trainer, AutoModelForTokenClassification, DataCollatorForTokenClassification
+from transformers import (
+    TrainingArguments,
+    Trainer,
+    AutoModelForTokenClassification,
+    DataCollatorForTokenClassification,
+    set_seed,
+)
 from transformers.models.bert.modeling_bert import BertForTokenClassification, BertForMaskedLM
 from datasets import load_dataset, DatasetDict, Dataset, IterableDatasetDict, IterableDataset
 from sklearn.metrics import f1_score, accuracy_score
@@ -78,7 +84,7 @@ def align_labels_with_tokens(labels, word_ids, task='ner'):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--checkpoint', type=str, required=True, help='path to the CKPT file')
+    parser.add_argument('--checkpoint', type=str, required=True, help='path to the CKPT file or HuggingFace checkpoint')
     parser.add_argument('--tokenizer', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
     parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk', 'universal-dependencies'],
                         required=True, help='name of the dataset to train on')
@@ -89,15 +95,31 @@ if __name__ == '__main__':
     parser.add_argument('--scheduler_type', type=str, default='linear', help='type of the learning rate scheduler')
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help='warmup ratio for the learning rate scheduler')
     parser.add_argument('--weight_decay', type=float, default=0.01, help='weight decay for the optimizer')
+    parser.add_argument('--load_best_model', action='store_true', help='load the best model at the end of training')
+    parser.add_argument('--seed', type=int, default=None, help='random seed for reproducibility')
     args = parser.parse_args()
+
+    if args.seed is not None:
+        set_seed(args.seed)
 
     dataset = load_huggingface_dataset(args.dataset)
     label_column_name = 'ner_tags' if args.dataset in ['wikiann', 'ner-uk'] else 'pos_tags'
     label_names = dataset['train'].features[label_column_name].feature.names
     finetuning_task = 'pos' if args.dataset in ['universal-dependencies'] else 'ner'
 
-    model = load_ckpt(args.checkpoint)
-    model = convert_model(model, num_labels=dataset['train'].features[label_column_name].feature.num_classes, finetuning_task=finetuning_task)
+    if args.checkpoint.endswith('.ckpt'):
+        model = load_ckpt(args.checkpoint)
+        model = convert_model(
+            model,
+            num_labels=len(label_names),
+            finetuning_task=finetuning_task
+        )
+    else:
+        model = AutoModelForTokenClassification.from_pretrained(
+            args.checkpoint,
+            num_labels=len(label_names),
+            finetuning_task=finetuning_task
+        )
 
     print(label_names)
     print(dataset['train'].features[label_column_name].feature.num_classes)
@@ -153,7 +175,7 @@ if __name__ == '__main__':
             per_device_eval_batch_size=args.eval_batch_size,
             num_train_epochs=args.epochs,
             weight_decay=args.weight_decay,
-            load_best_model_at_end=False,
+            load_best_model_at_end=args.load_best_model,
             metric_for_best_model=main_metric,
             lr_scheduler_type=args.scheduler_type,
             warmup_ratio=args.warmup_ratio,
