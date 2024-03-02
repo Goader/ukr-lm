@@ -5,7 +5,7 @@ import csv
 
 import torch
 import numpy as np
-from transformers import TrainingArguments, Trainer, AutoModelForSequenceClassification, DataCollatorWithPadding
+from transformers import set_seed, AutoTokenizer, AutoModelForSequenceClassification, DataCollatorWithPadding
 from transformers.models.bert.modeling_bert import BertForSequenceClassification, BertForMaskedLM
 from datasets import load_dataset
 from sklearn.metrics import f1_score, accuracy_score
@@ -25,12 +25,19 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, required=True, help='path to the inference data (CSV file)')
     parser.add_argument('--output', type=str, required=True, help='path to the output CSV file')
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
+    parser.add_argument('--seed', type=int, default=None, help='random seed')
     args = parser.parse_args()
+
+    if args.seed is not None:
+        set_seed(args.seed)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     model = AutoModelForSequenceClassification.from_pretrained(args.checkpoint).to(device)
-    tokenizer = LibertaTokenizer(args.tokenizer)
+    if Path(args.tokenizer).exists():
+        tokenizer = LibertaTokenizer(args.tokenizer)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
     dataset = load_dataset(
         'csv',

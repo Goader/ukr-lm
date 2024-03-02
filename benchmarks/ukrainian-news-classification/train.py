@@ -3,7 +3,14 @@ from pathlib import Path
 
 import torch
 import numpy as np
-from transformers import TrainingArguments, Trainer, AutoModelForSequenceClassification, DataCollatorWithPadding
+from transformers import (
+    set_seed,
+    TrainingArguments,
+    Trainer,
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    DataCollatorWithPadding
+)
 from transformers.models.bert.modeling_bert import BertForSequenceClassification, BertForMaskedLM
 from datasets import load_dataset
 from sklearn.metrics import f1_score, accuracy_score
@@ -15,9 +22,11 @@ from ukrlm.utils import load_ckpt
 DEFAULT_TOKENIZER_PATH = \
     Path(__file__).parent.parent.parent / 'research' / 'tokenizer' / 'experiment-5-overall-v2' / 'spm.model'
 
+NUM_LABELS = 7
+
 
 def convert_model(model: BertForMaskedLM) -> BertForSequenceClassification:
-    model.config.num_labels = 7
+    model.config.num_labels = NUM_LABELS
     clf = AutoModelForSequenceClassification.from_config(model.config)
     clf.bert.embeddings.load_state_dict(model.bert.embeddings.state_dict())
     clf.bert.encoder.load_state_dict(model.bert.encoder.state_dict())
@@ -26,17 +35,28 @@ def convert_model(model: BertForMaskedLM) -> BertForSequenceClassification:
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--checkpoint', type=str, required=True, help='path to the CKPT file')
+    parser.add_argument('--checkpoint', type=str, required=True, help='path to the CKPT file or HuggingFace checkpoint')
     parser.add_argument('--tokenizer', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
     parser.add_argument('--train-data', type=str, required=True, help='path to the train data')
     parser.add_argument('--val-data', type=str, required=True, help='path to the validation data')
     parser.add_argument('--test-data', type=str, required=True, help='path to the test data')
+    parser.add_argument('--output-best-model', type=str, default='models/best', help='path to the best model')
+    parser.add_argument('--seed', type=int, default=None, help='random seed')
     args = parser.parse_args()
 
-    model = load_ckpt(args.checkpoint)
-    model = convert_model(model)
+    if args.seed is not None:
+        set_seed(args.seed)
 
-    tokenizer = LibertaTokenizer(args.tokenizer)
+    if args.checkpoint.endswith('.ckpt'):
+        model = load_ckpt(args.checkpoint)
+        model = convert_model(model)
+        tokenizer = LibertaTokenizer(args.tokenizer)
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.checkpoint,
+            num_labels=NUM_LABELS,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
     dataset = load_dataset(
         'csv',
@@ -102,4 +122,4 @@ if __name__ == '__main__':
 
     print('Evaluating on test dataset')
     trainer.evaluate(dataset['test'])
-    trainer.save_model('models/best')
+    trainer.save_model(args.output_best_model)
