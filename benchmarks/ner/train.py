@@ -8,6 +8,7 @@ import numpy as np
 from transformers import (
     TrainingArguments,
     Trainer,
+    AutoTokenizer,
     AutoModelForTokenClassification,
     DataCollatorForTokenClassification,
     set_seed,
@@ -114,18 +115,18 @@ if __name__ == '__main__':
             num_labels=len(label_names),
             finetuning_task=finetuning_task
         )
+        tokenizer = LibertaTokenizer(args.tokenizer)
     else:
         model = AutoModelForTokenClassification.from_pretrained(
             args.checkpoint,
             num_labels=len(label_names),
             finetuning_task=finetuning_task
         )
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
     print(label_names)
     print(dataset['train'].features[label_column_name].feature.num_classes)
     print(model)
-
-    tokenizer = LibertaTokenizer(args.tokenizer)
 
     def tokenize_and_align_labels(examples):
         tokenized_inputs = tokenizer(
