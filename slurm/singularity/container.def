@@ -1,0 +1,37 @@
+bootstrap: localimage
+from: lumi-pytorch-rocm-5.5.1-python-3.10-pytorch-v2.0.1-dockerhash-765f7f6ebd2f.sif
+
+%files
+    ukr-lm/ /mnt/ukr-lm
+
+%environment
+    export WANDB_API_KEY=your-api-key
+    export HF_TOKEN=your-hf-token
+    export HF_HOME="~/scratch/cache/huggingface"
+
+%post
+    NOW=`date`
+    echo "export NOW=\"${NOW}\"" >> $SINGULARITY_ENVIRONMENT
+
+    $WITH_CONDA
+    pip install /mnt/ukr-lm
+
+%runscript
+    echo "Running Ukrainian language model pre-training package..."
+    echo "Build date: $NOW"
+
+    $WITH_CONDA
+    echo "Python version: `python --version`"
+    echo "Arguments: $@"
+
+    mkdir -p ~/scratch/ukr-lm-outputs
+    cd ~/scratch/ukr-lm-outputs
+
+    exec "$@"
+
+%labels
+    Author mhaltiuk@student.agh.edu.pl
+    Version v0.1.0
+
+%help
+    This is a PyTorch image with Ukrainian language model pre-training package installed.
