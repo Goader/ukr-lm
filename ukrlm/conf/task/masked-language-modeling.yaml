@@ -8,7 +8,7 @@ gradient_clip_val: 1.0
 gradient_clip_algorithm: "norm"
 accumulate_grad_batches: 1
 mlm_probability: 0.15
-pad_to_multiple_of: null
+pad_to_multiple_of: 8
 strategy: "ddp"
 precision: bf16-mixed
 use_flash_attention: true

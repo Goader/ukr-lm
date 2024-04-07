@@ -1,0 +1,2 @@
+# TODO implement benchmark which will train some small network, but with lots of computations on gpu to simulate
+# the real training process of transformer. Then use different data loading strategies to see which one is the fastest
