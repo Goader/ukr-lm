@@ -17,6 +17,7 @@ if __name__ == '__main__':
     parser.add_argument('--tokenizer_path', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
     parser.add_argument('--output_dir', type=str, required=True, help='path to the output directory')
     parser.add_argument('--max_length', type=int, default=512, help='max length of the input sequence')
+    parser.add_argument('--num_shards', type=int, default=240, help='number of shards')
     parser.add_argument('--num_proc', type=int, default=None)
     parser.add_argument('--cache_dir', type=str, default=None, help='path to the cache directory')
     args = parser.parse_args()
@@ -73,4 +74,5 @@ if __name__ == '__main__':
     dataset.save_to_disk(
         args.output_dir,
         num_proc=args.num_proc,
+        num_shards=args.num_shards,
     )
