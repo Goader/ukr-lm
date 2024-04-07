@@ -24,6 +24,41 @@ from ukrlm.datasets import (
 from ukrlm.tokenizers import LibertaTokenizer
 
 
+def tokenize_function(examples: list[dict], tokenizer: PreTrainedTokenizerBase, max_length: int):
+    output = tokenizer(
+        examples['text'],
+        return_special_tokens_mask=True,
+    )
+
+    outputs = {
+        'id': [],
+        'input_ids': [],
+        'attention_mask': [],
+        'special_tokens_mask': [],
+    }
+
+    max_length = max_length - 2  # for CLS and SEP
+
+    # splitting into multiple examples if the input is too long
+    for doc_idx in range(len(examples['text'])):
+        doc_id = examples['id'][doc_idx]
+        input_ids = output['input_ids'][doc_idx][1:-1]  # removing CLS and SEP
+        attention_mask = output['attention_mask'][doc_idx][1:-1]  # same
+        special_tokens_mask = output['special_tokens_mask'][doc_idx][1:-1]  # same
+
+        for i in range(0, len(input_ids), max_length):
+            outputs['id'].append(doc_id)
+            outputs['input_ids'].append([
+                tokenizer.cls_token_id,
+                *input_ids[i:i + max_length],
+                tokenizer.sep_token_id
+            ])
+            outputs['attention_mask'].append([1, *attention_mask[i:i + max_length], 1])
+            outputs['special_tokens_mask'].append([1, *special_tokens_mask[i:i + max_length], 1])
+
+    return outputs
+
+
 class MaskedLanguageModelingDataModule(pl.LightningDataModule):
     def __init__(self, cfg: DictConfig):
         super().__init__()
@@ -56,45 +91,16 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, *args)
         self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, *args)
 
-        def tokenize_function(examples):
-            output = self.tokenizer(
-                examples['text'],
-                return_special_tokens_mask=True,
-            )
-
-            outputs = {
-                'id': [],
-                'input_ids': [],
-                'attention_mask': [],
-                'special_tokens_mask': [],
-            }
-
-            # splitting into multiple examples if the input is too long
-            for doc_idx in range(len(examples['text'])):
-                doc_id = examples['id'][doc_idx]
-                input_ids = output['input_ids'][doc_idx][1:-1]  # removing CLS and SEP
-                attention_mask = output['attention_mask'][doc_idx][1:-1]  # same
-                special_tokens_mask = output['special_tokens_mask'][doc_idx][1:-1]  # same
-
-                max_length = self.cfg.model.max_position_embeddings - 2  # for CLS and SEP
-                for i in range(0, len(input_ids), max_length):
-                    outputs['id'].append(doc_id)
-                    outputs['input_ids'].append([
-                        self.tokenizer.cls_token_id,
-                        *input_ids[i:i + max_length],
-                        self.tokenizer.sep_token_id
-                    ])
-                    outputs['attention_mask'].append([1, *attention_mask[i:i + max_length], 1])
-                    outputs['special_tokens_mask'].append([1, *special_tokens_mask[i:i + max_length], 1])
-
-            return outputs
-
         for name, dataset in list(self.train_datasets.items()):
             mapped_dataset = dataset.map(
                 tokenize_function,
                 batched=True,
                 batch_size=256,
                 remove_columns=['text'],
+                fn_kwargs=dict(
+                    tokenizer=self.tokenizer,
+                    max_length=self.cfg.model.max_position_embeddings
+                )
             )
 
             examples_passed_counter_dataset = ExamplesPassedCounterDataset(mapped_dataset)
