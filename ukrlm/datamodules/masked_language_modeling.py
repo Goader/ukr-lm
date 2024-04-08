@@ -6,8 +6,9 @@ from omegaconf import DictConfig
 import torch
 import lightning.pytorch as pl
 from lightning.pytorch.utilities import rank_zero_info
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader, Dataset, IterableDataset, DistributedSampler
 
+import datasets
 from transformers import (
     AutoTokenizer,
     PreTrainedTokenizerBase,
@@ -64,8 +65,8 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         super().__init__()
         self.cfg = cfg
 
-        self.train_datasets: dict[str, IterableDataset] = dict()
-        self.val_datasets: dict[str, IterableDataset] = dict()
+        self.train_datasets: dict[str, Dataset | IterableDataset] = dict()
+        self.val_datasets: dict[str, Dataset | IterableDataset] = dict()
 
         self.tokenizer: PreTrainedTokenizerBase | None = None
         self.collator: DataCollator | None = None
@@ -81,6 +82,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         # FIXME tokenizer is not yet on huggingface hub
         # self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.name)
         self.tokenizer = LibertaTokenizer.from_pretrained(self.cfg.datamodule.tokenizer_path)
+        # TODO substitute with full-word masking collator
         self.collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer,
             mlm_probability=self.cfg.task.mlm_probability,
@@ -92,6 +94,11 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         self.val_datasets = instantiate_datasets(self.cfg.datamodule.datasets.val, *args)
 
         for name, dataset in list(self.train_datasets.items()):
+            dataset_config = self.cfg.datasets.get(name, dict())
+
+            if dataset_config.get('tokenized', False):
+                continue
+
             mapped_dataset = dataset.map(
                 tokenize_function,
                 batched=True,
@@ -110,11 +117,20 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
 
         # FIXME is this properly distributed?
         for name, dataset in list(self.val_datasets.items()):
+            dataset_config = self.cfg.datasets.get(name, dict())
+
+            if dataset_config.get('tokenized', False):
+                continue
+
             self.val_datasets[name] = dataset.map(
                 tokenize_function,
                 batched=True,
                 batch_size=256,
                 remove_columns=dataset.column_names,
+                fn_kwargs=dict(
+                    tokenizer=self.tokenizer,
+                    max_length=self.cfg.model.max_position_embeddings
+                )
             ).remove_columns(['id'])  # FIXME we could replace removal with proper integer IDs
 
     def train_dataloader(self):
@@ -122,13 +138,26 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
             raise RuntimeError('Tokenizer and collator must be initialized before training dataloader')
 
         # FIXME temporary weights since we have only one dataset for now
-        dataset = MultiSourceDataset(datasets=self.train_datasets,
-                                     weights=dict.fromkeys(self.train_datasets.keys(), 1.0))
+        # dataset = MultiSourceDataset(datasets=self.train_datasets,
+        #                              weights=dict.fromkeys(self.train_datasets.keys(), 1.0))
+        if len(self.train_datasets) != 1:
+            raise NotImplementedError('only one dataset is supported for now')
+        dataset = list(self.train_datasets.values())[0]
+
+        sampler = DistributedSampler(
+            dataset,
+            num_replicas=self.trainer.world_size,
+            rank=self.trainer.global_rank,
+            shuffle=False,
+        ) if self.cfg.task.strategy == 'ddp' else None
 
         return DataLoader(dataset=dataset,
                           batch_size=self.cfg.datamodule.batch_size,
                           num_workers=self.cfg.datamodule.num_workers,
+                          sampler=sampler,
                           pin_memory=self.cfg.datamodule.pin_memory,
+                          prefetch_factor=self.cfg.datamodule.prefetch_factor,
+                          multiprocessing_context=self.cfg.datamodule.multiprocessing_context,
                           collate_fn=self.collator)
 
     def val_dataloader(self):
@@ -140,39 +169,42 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                              batch_size=self.cfg.datamodule.batch_size,
                              num_workers=self.cfg.datamodule.num_workers,
                              pin_memory=self.cfg.datamodule.pin_memory,
+                             prefetch_factor=self.cfg.datamodule.prefetch_factor,
+                             multiprocessing_context=self.cfg.datamodule.multiprocessing_context,
                              collate_fn=self.collator)
             for name, dataset in self.val_datasets.items()
         }
         return list(dataloaders.values())[0]  # FIXME temporary solution
 
-    def state_dict(self) -> Dict[str, Any]:
-        """
-        Returns the state of the datamodule as a dictionary.
-
-        Note: the number of examples passed is describing the post-processed examples, and we are not skipping
-        real documents, but post-processed examples as well. Thus, we can save this number only for a single process
-        and then broadcast it to all other processes, when loading the state.
-
-        :return: dictionary with the state of the datamodule
-        """
-
-        examples_passed_per_dataset = {
-            name: dataset.examples_passed
-            for name, dataset in self.examples_passed_counter_per_dataset.items()
-        }
-        return {
-            'examples_passed_per_dataset': examples_passed_per_dataset,
-            'skipped_train_examples_per_dataset': self.skip_train_examples_per_dataset,
-        }
-
-    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-        # skipping all examples that have already been passed in previous runs
-        self.skip_train_examples_per_dataset = state_dict['examples_passed_per_dataset']
-        for name, dataset in self.train_datasets.items():
-            self.train_datasets[name] = SkipExamplesDataset(
-                dataset,
-                self.skip_train_examples_per_dataset.get(name, 0)
-            )
-
-        # logging
-        rank_zero_info(f"Skipping {self.skip_train_examples_per_dataset} examples per dataset")
+    # TODO how do we do this with map-like datasets?
+    # def state_dict(self) -> Dict[str, Any]:
+    #     """
+    #     Returns the state of the datamodule as a dictionary.
+    #
+    #     Note: the number of examples passed is describing the post-processed examples, and we are not skipping
+    #     real documents, but post-processed examples as well. Thus, we can save this number only for a single process
+    #     and then broadcast it to all other processes, when loading the state.
+    #
+    #     :return: dictionary with the state of the datamodule
+    #     """
+    #
+    #     examples_passed_per_dataset = {
+    #         name: dataset.examples_passed
+    #         for name, dataset in self.examples_passed_counter_per_dataset.items()
+    #     }
+    #     return {
+    #         'examples_passed_per_dataset': examples_passed_per_dataset,
+    #         'skipped_train_examples_per_dataset': self.skip_train_examples_per_dataset,
+    #     }
+    #
+    # def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+    #     # skipping all examples that have already been passed in previous runs
+    #     self.skip_train_examples_per_dataset = state_dict['examples_passed_per_dataset']
+    #     for name, dataset in self.train_datasets.items():
+    #         self.train_datasets[name] = SkipExamplesDataset(
+    #             dataset,
+    #             self.skip_train_examples_per_dataset.get(name, 0)
+    #         )
+    #
+    #     # logging
+    #     rank_zero_info(f"Skipping {self.skip_train_examples_per_dataset} examples per dataset")
