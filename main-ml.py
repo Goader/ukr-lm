@@ -146,6 +146,7 @@ def main(cfg: DictConfig):
         case 'liberta-base':
             raise NotImplementedError()
         case 'deberta-v3-base':
+            # TODO generator should be the same width, but half the depth
             raise NotImplementedError()
             model = ...
             print('Embeddings shape', model.get_input_embeddings().weight.size())
