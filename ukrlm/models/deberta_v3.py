@@ -12,11 +12,23 @@ from transformers import (
     DebertaV2Config,
 )
 from transformers.modeling_outputs import ModelOutput, MaskedLMOutput
+from transformers.activations import ACT2FN
 from transformers.models.deberta_v2.modeling_deberta_v2 import (
     DebertaV2PredictionHeadTransform,
+    DebertaV2LMPredictionHead,
+    DebertaV2Encoder,
 )
 
 from omegaconf import DictConfig
+
+
+__all__ = [
+    'RTDOutput',
+    'DebertaV3RTDHead',
+    'DebertaV3ForRTD',
+    'DebertaV3EnhancedMaskDecoder',
+    'DebertaV3ForMLM',
+]
 
 
 @dataclass
@@ -48,76 +60,48 @@ class RTDOutput(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-# @dataclass
-# class PretrainingRTDOutput(ModelOutput):
-#     """
-#     Base class for outputs of pretraining RTD models.
-#
-#     Args:
-#         mlm_output (`MaskedLMOutput`):
-#             The output of the Masked Language Model head.
-#         rtd_output (`RTDOutput`):
-#             The output of the Replaced Token Detection head.
-#         rtd_labels (`torch.LongTensor`):
-#             Labels produced by the Masked Language Model head (MLM) for the Replaced Token Detection model (RTD).
-#     """
-#
-#     mlm_output: MaskedLMOutput
-#     rtd_output: RTDOutput
-#     rtd_labels: torch.LongTensor
-
-
 # Inspired by transformers.models.deberta_v2.modeling_deberta_v2.DebertaV2LMPredictionHead
 # and https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/replaced_token_detection_model.py
 class DebertaV3RTDHead(nn.Module):
     def __init__(self, config: DebertaV2Config):
         super().__init__()
-        self.embedding_size = getattr(config, 'embedding_size', config.hidden_size)
+        self.embedding_size = getattr(config, "embedding_size", config.hidden_size)
 
-        self.transform = DebertaV2PredictionHeadTransform(config)
-        # The output weights are the same as the input embeddings, but there is
-        # an output-only bias for each token.
-        self.decoder = nn.Linear(self.embedding_size, 1, bias=False)
+        self.dense = nn.Linear(config.hidden_size, self.embedding_size)
+        if isinstance(config.hidden_act, str):
+            self.transform_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.transform_act_fn = config.hidden_act
+        self.LayerNorm = nn.LayerNorm(self.embedding_size, eps=config.layer_norm_eps)
 
-        self.bias = nn.Parameter(torch.zeros(1))
-
-        # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
-        self.decoder.bias = self.bias
+        self.classifier = nn.Linear(self.embedding_size, 1)
 
     def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states)
-        hidden_states = self.decoder(hidden_states)
-        return hidden_states
+        # selecting all embeddings for the [CLS] token
+        ctx_states = hidden_states[:, 0, :].unsqueeze(1)
+
+        # summing the embeddings of the [CLS] token and the hidden states and passing through the layers
+        seq_states = self.LayerNorm(ctx_states + hidden_states)
+        seq_states = self.dense(seq_states)
+        seq_states = self.transform_act_fn(seq_states)
+
+        # Replaced Token Detection (RTD) classification
+        logits = self.classifier(seq_states).squeeze(-1)
+
+        return logits
 
 
 class DebertaV3ForRTD(nn.Module):
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, config: DebertaV2Config):
         super().__init__()
 
-        self.cfg = cfg
-
-        # FIXME is this correct?
-        match cfg.model.name:
-            case 'deberta-v3-base':
-                model_name = 'microsoft/deberta-v3-base'
-            case 'deberta-v3-large':
-                model_name = 'microsoft/deberta-v3-large'
-            case _:
-                raise ValueError(f'unknown model name: {cfg.model.name}')
-
-        config = AutoConfig.from_pretrained(
-            model_name,
-            max_position_embeddings=self.cfg.model.max_position_embeddings,
-            vocab_size=self.cfg.model.vocab_size,
-            pad_token_id=self.cfg.model.pad_token_id,
-            unk_token_id=self.cfg.model.unk_token_id,
-            cls_token_id=self.cfg.model.cls_token_id,
-            sep_token_id=self.cfg.model.sep_token_id,
-            mask_token_id=self.cfg.model.mask_token_id,
-        )
+        self.config = config
 
         self.deberta = AutoModel.from_config(config)
-        self.cls = DebertaV3RTDHead(self.generator.config)
+        self.cls = DebertaV3RTDHead(config)
+
+    def get_input_embeddings(self):
+        return self.deberta.get_input_embeddings()
 
     def forward(
         self,
@@ -153,5 +137,106 @@ class DebertaV3ForRTD(nn.Module):
             loss=loss,
             logits=logits,
             hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+        )
+
+
+class DebertaV3EnhancedMaskDecoder(nn.Module):
+    def __init__(self, config: DebertaV2Config):
+        super().__init__()
+        self.embedding_size = getattr(config, 'embedding_size', config.hidden_size)
+
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, self.embedding_size)
+
+        # TODO substitute with custom prediction head utilizing word embeddings as decoder?
+        self.prediction_head = DebertaV2LMPredictionHead(config)
+
+    def forward(
+        self,
+        encoder_layers: tuple[torch.Tensor],
+        encoder: DebertaV2Encoder,
+        attention_mask: Optional[torch.Tensor] = None,
+    ):
+        hidden_states = encoder_layers[-2]
+
+        # preparing query states and other inputs
+        position_ids = torch.arange(hidden_states.size(1), device=hidden_states.device).unsqueeze(0)
+        position_embeddings = self.position_embeddings(position_ids)
+        rel_embeddings = encoder.get_rel_embedding()
+
+        query_states = hidden_states + position_embeddings
+
+        # defining the decoder layers (sharing weights)
+        decoder_layers = [
+            encoder.layer[-1],
+            encoder.layer[-1],
+        ]
+
+        # passing the query states through the decoder layers
+        for layer in decoder_layers:
+            query_states = layer(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                query_states=query_states,
+                rel_embeddings=rel_embeddings,
+            )
+
+        logits = self.prediction_head(query_states)
+        return logits
+
+
+# TODO possible optimizations:
+#  - skip the last layer in deberta
+#  - skip calculating logits for the unmasked tokens
+class DebertaV3ForMLM(nn.Module):
+    def __init__(self, config: DebertaV2Config):
+        super().__init__()
+
+        self.config = config
+
+        self.deberta = AutoModel.from_config(config)
+        self.decoder = DebertaV3EnhancedMaskDecoder(config)
+
+    def get_input_embeddings(self) -> nn.Module:
+        return self.deberta.get_input_embeddings()
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+    ) -> Union[Tuple, MaskedLMOutput]:
+
+        outputs = self.deberta(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=True,
+        )
+
+        encoder_layers = outputs.hidden_states
+        logits = self.decoder(
+            encoder_layers=encoder_layers,
+            encoder=self.deberta.encoder,
+            attention_mask=attention_mask
+        )
+
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+        return MaskedLMOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=outputs.hidden_states if output_hidden_states else None,
             attentions=outputs.attentions,
         )

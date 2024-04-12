@@ -9,11 +9,13 @@ from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.loggers import WandbLogger
 
 import torch
-from transformers import AutoModelForMaskedLM, AutoConfig, AutoModel
+from transformers import AutoModelForMaskedLM, AutoConfig, AutoModel, DebertaV2Config
 from transformers.models.bert.modeling_bert import BertForMaskedLM
 
 from ukrlm.datamodules import MaskedLanguageModelingDataModule
 from ukrlm.tasks.masked_language_modeling import MaskedLanguageModelingTask
+from ukrlm.tasks.replaced_token_detection import ReplacedTokenDetectionTask
+from ukrlm.models import DebertaV3ForMLM, DebertaV3ForRTD
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ def train(
             checkpoint_callback,
             learning_rate_monitor,
         ],
-        plugins=[SLURMEnvironment(auto_requeue=False)],
+        # plugins=[SLURMEnvironment(auto_requeue=False)],
         profiler=cfg.profiler,
         # overfit_batches=4,
         # fast_dev_run=True,
@@ -145,11 +147,33 @@ def main(cfg: DictConfig):
             # print('Embeddings shape', model.get_input_embeddings().weight.size())
         case 'liberta-base':
             raise NotImplementedError()
-        case 'deberta-v3-base':
-            # TODO generator should be the same width, but half the depth
-            raise NotImplementedError()
-            model = ...
-            print('Embeddings shape', model.get_input_embeddings().weight.size())
+        case model_name if model_name in ['deberta-v3-base', 'deberta-v3-large']:
+            discriminator_config = AutoConfig.from_pretrained(
+                'microsoft/' + model_name,
+                max_position_embeddings=cfg.model.max_position_embeddings,
+                vocab_size=cfg.model.vocab_size,
+                pad_token_id=cfg.model.pad_token_id,
+                unk_token_id=cfg.model.unk_token_id,
+                cls_token_id=cfg.model.cls_token_id,
+                sep_token_id=cfg.model.sep_token_id,
+                mask_token_id=cfg.model.mask_token_id,
+                # deberta specific config
+                relative_attention=True,
+                position_biased_input=False,
+                pos_att_type='p2c|c2p',
+                # TODO
+            )
+
+            generator_config = DebertaV2Config.from_dict(
+                discriminator_config.to_dict(),
+                num_hidden_layers=cfg.model.generator_n_layers,
+            )
+
+            generator = DebertaV3ForMLM(generator_config)
+            discriminator = DebertaV3ForRTD(discriminator_config)
+
+            print('Embeddings shape (generator)', generator.get_input_embeddings().weight.size())
+            print('Embeddings shape (discriminator)', discriminator.get_input_embeddings().weight.size())
         case _:
             raise ValueError(
                 'unknown model, can be either `bert-base` or `bert-large` or ...'
@@ -158,7 +182,8 @@ def main(cfg: DictConfig):
     match cfg.task.name:
         case 'masked-language-modeling':
             task = MaskedLanguageModelingTask(cfg, model)
-        # TODO add replaced token detection task
+        case 'replaced-token-detection':
+            task = ReplacedTokenDetectionTask(cfg, generator, discriminator)
         case _:
             raise ValueError(
                 'unknown task, can be either `masked-language-modeling` or ...'
