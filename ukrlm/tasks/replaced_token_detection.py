@@ -12,6 +12,7 @@ from torchmetrics.classification import MulticlassAccuracy, F1Score
 from transformers import AutoModelForMaskedLM
 
 from ukrlm.schedulers import instantiate_scheduler
+from ukrlm.models.deberta_v3 import DebertaV3ForMLM, DebertaV3ForRTD
 
 
 @dataclass
@@ -27,8 +28,8 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
     def __init__(
         self,
         cfg: DictConfig,
-        generator: nn.Module,
-        discriminator: nn.Module,
+        generator: DebertaV3ForMLM,
+        discriminator: DebertaV3ForRTD,
     ):
         super().__init__()
         self.save_hyperparameters(cfg)
@@ -39,7 +40,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
 
         self.delta_embeddings = nn.Embedding(
             num_embeddings=cfg.model.vocab_size,
-            embedding_dim=cfg.model.hidden_size,
+            embedding_dim=discriminator.config.hidden_size,
             padding_idx=cfg.model.pad_token_id,
         )
 
@@ -69,6 +70,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
             return rtd_f1
 
     def common_step(self, batch, batch_idx) -> StepOutput:
+        print(batch.keys())
         # initial setup
         masked_tokens = batch['labels'] != -100
         mlm_input_ids = batch['input_ids']
@@ -93,9 +95,6 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         # not allowing RTD to update the generator, so it won't make its life easier by worsening the generator
         inputs_embeds = generator_word_embeddings(rtd_input_ids).detach() + self.delta_embeddings(rtd_input_ids)
 
-        # TODO what do we do with this??
-        # for now we have generator and discriminator using separate positional embeddings, do we stay like that?
-        # they also seem to be absolute positional embeddings, not relative, need to verify this
         rtd_output = self.discriminator(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -139,7 +138,6 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
                      on_step=True, logger=True, on_epoch=False)
 
         return output.loss
-
 
     def validation_step(self, batch, batch_idx):
         output = self.common_step(batch, batch_idx)
