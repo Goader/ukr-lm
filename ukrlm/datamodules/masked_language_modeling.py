@@ -23,6 +23,7 @@ from ukrlm.datasets import (
     instantiate_datasets,
 )
 from ukrlm.tokenizers import LibertaTokenizer
+from ukrlm.collators import DataCollatorForNgramMasking
 
 
 def tokenize_function(examples: list[dict], tokenizer: PreTrainedTokenizerBase, max_length: int):
@@ -78,16 +79,30 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         # AutoTokenizer.from_pretrained(self.cfg.model.name)  # FIXME tokenizer is not yet on huggingface hub
         pass
 
+    def instantiate_collator(self):
+        if self.cfg.task.collator == 'DataCollatorForLanguageModeling':
+            collator = DataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer,
+                mlm_probability=self.cfg.task.mlm_probability,
+                pad_to_multiple_of=self.cfg.task.pad_to_multiple_of
+            )
+        elif self.cfg.task.collator == 'DataCollatorForNgramMasking':
+            collator = DataCollatorForNgramMasking(
+                tokenizer=self.tokenizer,
+                mlm_probability=self.cfg.task.mlm_probability,
+                max_ngram_size=1,
+                pad_to_multiple_of=self.cfg.task.pad_to_multiple_of
+            )
+        else:
+            raise ValueError(f'unknown collator: {self.cfg.task.collator}')
+
+        return collator
+
     def setup(self, stage: str | None = None) -> None:
         # FIXME tokenizer is not yet on huggingface hub
         # self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.name)
         self.tokenizer = LibertaTokenizer.from_pretrained(self.cfg.datamodule.tokenizer_path)
-        # TODO substitute with full-word masking collator
-        self.collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm_probability=self.cfg.task.mlm_probability,
-            pad_to_multiple_of=self.cfg.task.pad_to_multiple_of
-        )
+        self.collator = self.instantiate_collator()
 
         args = (self.cfg, self.trainer.global_rank, self.trainer.world_size)
         self.train_datasets = instantiate_datasets(self.cfg.datamodule.datasets.train, *args)
