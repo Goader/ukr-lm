@@ -80,6 +80,16 @@ def spacy_tokenize(text):
     ]
 
 
+def is_latin(piece: str) -> bool:
+    piece = piece.removeprefix('▁').removeprefix('##').removesuffix('</w>')
+    return all(char.isalpha() and char.isascii() for char in piece)
+
+
+def is_digit(piece: str) -> bool:
+    piece = piece.removeprefix('▁').removeprefix('##').removesuffix('</w>')
+    return all(char.isdigit() for char in piece)
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--model', type=str, help='Path to the model file.')
@@ -105,10 +115,18 @@ if __name__ == '__main__':
         pieces_counts.append(len(pieces))
         print(f'{s:>{max_length}}    {format_pieces(pieces)}')
 
+    # tokenizer statistics
+    vocabulary_size = tokenizer.vocab_size
+    tokenizer.get_vocab()
+    latin_script_pieces = sum(is_latin(piece) for piece in tokenizer.get_vocab().keys())
+    digit_pieces = sum(is_digit(piece) for piece in tokenizer.get_vocab().keys())
+
     print()
     print(GREEN + 'Statistics:' + RESET)
     print(f'  {ORANGE}Average number of pieces:{RESET} {sum(pieces_counts) / len(pieces_counts):.3f}')
-    print(f'  {ORANGE}Vocabulary size:{RESET} {tokenizer.vocab_size}')
+    print(f'  {ORANGE}Vocabulary size:{RESET} {vocabulary_size}')
+    print(f'  {ORANGE}Number of pieces in latin script:{RESET} {latin_script_pieces}')
+    print(f'  {ORANGE}Number of digit pieces:{RESET} {digit_pieces}')
     print()
 
     # metrics
