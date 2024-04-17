@@ -8,7 +8,7 @@ from ukrlm.datamodules.masked_language_modeling import tokenize_function
 
 
 DEFAULT_TOKENIZER_PATH = Path(__file__).parent.parent \
-                         / 'research' / 'tokenizer' / 'experiment-5-overall-v2' / 'spm.model'
+                         / 'research' / 'tokenizer' / 'experiment-6-liberta-v2' / 'spm.model'
 
 
 if __name__ == '__main__':
@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, required=True, help='path to the output directory')
     parser.add_argument('--max_length', type=int, default=512, help='max length of the input sequence')
     parser.add_argument('--num_shards', type=int, default=240, help='number of shards')
+    parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
     parser.add_argument('--num_proc', type=int, default=None)
     parser.add_argument('--cache_dir', type=str, default=None, help='path to the cache directory')
     args = parser.parse_args()
@@ -56,16 +57,18 @@ if __name__ == '__main__':
         lambda examples, indices: {'id': indices},
         with_indices=True,
         batched=True,
-        batch_size=256,
+        batch_size=args.batch_size,
+        num_proc=args.num_proc,
     )
 
     print('Tokenizing the dataset...')
     dataset = dataset.map(
         tokenize_function,
         batched=True,
-        batch_size=256,
+        batch_size=args.batch_size,
         remove_columns=dataset.column_names,
         fn_kwargs=dict(tokenizer=tokenizer, max_length=args.max_length),
+        num_proc=args.num_proc,
     )
 
     dataset = dataset.select_columns(['id', 'input_ids'])
