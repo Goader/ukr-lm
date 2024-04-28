@@ -52,6 +52,9 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             self.local_step += 1  # we do not need to increment it any further after initial logging
         del batch['id']
 
+        # temporary fix, because model does not accept this parameter
+        special_tokens_mask = batch.pop('special_tokens_mask', None)
+
         model_output = self.model(**batch)
         loss = model_output.loss
         logits = model_output.logits
@@ -70,6 +73,7 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        batch.pop('special_tokens_mask', None)
         model_output = self.model(**batch)
         loss = model_output.loss
         logits = model_output.logits
@@ -82,6 +86,7 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
+        batch.pop('special_tokens_mask', None)
         model_output = self.model(**batch)
         loss = model_output.loss
         logits = model_output.logits

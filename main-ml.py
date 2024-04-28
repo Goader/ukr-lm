@@ -42,7 +42,7 @@ def train(
             checkpoint_callback,
             learning_rate_monitor,
         ],
-        # plugins=[SLURMEnvironment(auto_requeue=False)],
+        plugins=[SLURMEnvironment(auto_requeue=False)],
         profiler=cfg.profiler,
         # overfit_batches=4,
         # fast_dev_run=True,

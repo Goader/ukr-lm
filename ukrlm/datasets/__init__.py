@@ -37,7 +37,9 @@ def dataset_by_name(
 
         return dataset
     elif name == 'culturax':
+        print('culturax tokenized', cfg.datasets.culturax.tokenized)
         if not cfg.datasets.culturax.tokenized:
+            print('loading culturax from the huggingface')
             dataset = load_dataset(
                 path='uonlp/CulturaX',
                 name='uk',
@@ -68,6 +70,7 @@ def dataset_by_name(
                 fn_kwargs={'rank': rank, 'world_size': world_size}
             )
         else:
+            print('loading culturax from the disk')
             dataset = load_from_disk(
                 dataset_path=cfg.datasets.culturax.tokenized_dataset_path,
                 keep_in_memory=cfg.datasets.culturax.keep_in_memory,
