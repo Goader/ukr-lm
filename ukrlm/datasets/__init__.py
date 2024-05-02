@@ -13,7 +13,7 @@ def dataset_by_name(
         cfg: DictConfig,
         rank: int,
         world_size: int
-) -> datasets.IterableDataset | datasets.IterableDatasetDict:
+) -> datasets.Dataset | datasets.DatasetDict | datasets.IterableDataset | datasets.IterableDatasetDict:
     if name == 'c4':
         raise NotImplementedError('C4 dataset is not yet implemented')
     # TODO add possibility for tokenized
@@ -97,7 +97,7 @@ def instantiate_datasets(
         cfg: DictConfig,
         rank: int,
         word_size: int
-) -> dict[str, datasets.IterableDataset | datasets.IterableDatasetDict]:
+) -> dict[str, datasets.Dataset | datasets.DatasetDict | datasets.IterableDataset | datasets.IterableDatasetDict]:
     return {
         name: dataset_by_name(name, cfg, rank, word_size)
         for name in datasets

@@ -24,6 +24,7 @@ from ukrlm.datasets import (
 )
 from ukrlm.tokenizers import LibertaTokenizer
 from ukrlm.collators import DataCollatorForNgramMasking
+from ukrlm.samplers import DistributedResumeSampler
 
 
 def tokenize_function(examples: list[dict], tokenizer: PreTrainedTokenizerBase, max_length: int):
@@ -69,8 +70,12 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         self.train_datasets: dict[str, Dataset | IterableDataset] = dict()
         self.val_datasets: dict[str, Dataset | IterableDataset] = dict()
 
+        self.joined_train_dataset: Dataset | IterableDataset | None = None
+
         self.tokenizer: PreTrainedTokenizerBase | None = None
         self.collator: DataCollator | None = None
+
+        self.distributed_sampler: DistributedResumeSampler | None = None
 
         self.examples_passed_counter_per_dataset: dict[str, ExamplesPassedCounterDataset] = dict()
         self.skip_train_examples_per_dataset: dict[str, int] = dict()
@@ -148,28 +153,30 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 )
             ).remove_columns(['id'])  # FIXME we could replace removal with proper integer IDs
 
+        # joined train dataset
+        # FIXME temporary weights since we have only one dataset for now
+        # train_dataset = MultiSourceDataset(datasets=self.train_datasets,
+        #                              weights=dict.fromkeys(self.train_datasets.keys(), 1.0))
+        if len(self.train_datasets) != 1:
+            raise NotImplementedError('only one dataset is supported for now')
+        self.joined_train_dataset = list(self.train_datasets.values())[0]
+
+        self.distributed_sampler = DistributedResumeSampler(
+            dataset=self.joined_train_dataset,
+            num_replicas=self.trainer.world_size,
+            rank=self.trainer.global_rank,
+            shuffle=False,
+            seed=self.cfg.seed,
+        ) if self.cfg.task.strategy == 'ddp' else None
+
     def train_dataloader(self):
         if not self.tokenizer or not self.collator:
             raise RuntimeError('Tokenizer and collator must be initialized before training dataloader')
 
-        # FIXME temporary weights since we have only one dataset for now
-        # dataset = MultiSourceDataset(datasets=self.train_datasets,
-        #                              weights=dict.fromkeys(self.train_datasets.keys(), 1.0))
-        if len(self.train_datasets) != 1:
-            raise NotImplementedError('only one dataset is supported for now')
-        dataset = list(self.train_datasets.values())[0]
-
-        sampler = DistributedSampler(
-            dataset,
-            num_replicas=self.trainer.world_size,
-            rank=self.trainer.global_rank,
-            shuffle=False,
-        ) if self.cfg.task.strategy == 'ddp' else None
-
-        return DataLoader(dataset=dataset,
+        return DataLoader(dataset=self.joined_train_dataset,
                           batch_size=self.cfg.datamodule.batch_size,
                           num_workers=self.cfg.datamodule.num_workers,
-                          sampler=sampler,
+                          sampler=self.distributed_sampler,
                           pin_memory=self.cfg.datamodule.pin_memory,
                           prefetch_factor=self.cfg.datamodule.prefetch_factor,
                           multiprocessing_context=self.cfg.datamodule.multiprocessing_context,
@@ -191,35 +198,11 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         }
         return list(dataloaders.values())[0]  # FIXME temporary solution
 
-    # TODO how do we do this with map-like datasets?
-    # def state_dict(self) -> Dict[str, Any]:
-    #     """
-    #     Returns the state of the datamodule as a dictionary.
-    #
-    #     Note: the number of examples passed is describing the post-processed examples, and we are not skipping
-    #     real documents, but post-processed examples as well. Thus, we can save this number only for a single process
-    #     and then broadcast it to all other processes, when loading the state.
-    #
-    #     :return: dictionary with the state of the datamodule
-    #     """
-    #
-    #     examples_passed_per_dataset = {
-    #         name: dataset.examples_passed
-    #         for name, dataset in self.examples_passed_counter_per_dataset.items()
-    #     }
-    #     return {
-    #         'examples_passed_per_dataset': examples_passed_per_dataset,
-    #         'skipped_train_examples_per_dataset': self.skip_train_examples_per_dataset,
-    #     }
-    #
-    # def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-    #     # skipping all examples that have already been passed in previous runs
-    #     self.skip_train_examples_per_dataset = state_dict['examples_passed_per_dataset']
-    #     for name, dataset in self.train_datasets.items():
-    #         self.train_datasets[name] = SkipExamplesDataset(
-    #             dataset,
-    #             self.skip_train_examples_per_dataset.get(name, 0)
-    #         )
-    #
-    #     # logging
-    #     rank_zero_info(f"Skipping {self.skip_train_examples_per_dataset} examples per dataset")
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        skip_samples = 0
+        self.distributed_sampler.resume(
+            epoch=self.trainer.current_epoch,  # TODO is the current_epoch already restored by this time?
+            skip_samples=skip_samples,
+        )
+        self.distributed_sampler.set_epoch(self.trainer.current_epoch)
+
