@@ -198,10 +198,28 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         }
         return list(dataloaders.values())[0]  # FIXME temporary solution
 
+    def state_dict(self) -> Dict[str, Any]:
+        batch_size = self.cfg.datamodule.batch_size
+        gradient_accumulation_steps = self.cfg.task.gradient_accumulation_steps
+        world_size = self.trainer.world_size
+
+        passed_batches = self.trainer.fit_loop.epoch_loop.batch_idx
+        passed_examples = passed_batches * batch_size * world_size
+
+        return {
+            'epoch': self.trainer.current_epoch,
+            'batch_size': batch_size,
+            'gradient_accumulation_steps': gradient_accumulation_steps,
+            'world_size': world_size,
+            'passed_batches': passed_batches,
+            'passed_examples': passed_examples,
+        }
+
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-        skip_samples = 0
+        last_epoch = state_dict['epoch']
+        skip_samples = state_dict['passed_examples']
         self.distributed_sampler.resume(
-            epoch=self.trainer.current_epoch,  # TODO is the current_epoch already restored by this time?
+            epoch=last_epoch,
             skip_samples=skip_samples,
         )
         self.distributed_sampler.set_epoch(self.trainer.current_epoch)

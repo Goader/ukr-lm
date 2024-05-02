@@ -117,7 +117,7 @@ class MaskedLanguageModelingTask(pl.LightningModule):
 
     def on_train_epoch_start(self) -> None:
         # setting the epoch for the distributed sampler
-        self.trainer.train_dataloader().sampler.set_epoch(self.current_epoch)
+        self.trainer.train_dataloader.sampler.set_epoch(self.current_epoch)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         checkpoint['huggingface_config'] = self.model.config
