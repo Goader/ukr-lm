@@ -131,7 +131,7 @@ class DebertaV3ForRTD(nn.Module):
         loss = None
         if labels is not None:
             loss_fct = nn.BCEWithLogitsLoss()
-            loss = loss_fct(logits.view(-1), labels.view(-1))
+            loss = loss_fct(logits.view(-1), labels.view(-1).float())
 
         return RTDOutput(
             loss=loss,
@@ -163,6 +163,7 @@ class DebertaV3EnhancedMaskDecoder(nn.Module):
         position_ids = torch.arange(hidden_states.size(1), device=hidden_states.device).unsqueeze(0)
         position_embeddings = self.position_embeddings(position_ids)
         rel_embeddings = encoder.get_rel_embedding()
+        attention_mask = encoder.get_attention_mask(attention_mask)
 
         query_states = hidden_states + position_embeddings
 
@@ -173,7 +174,7 @@ class DebertaV3EnhancedMaskDecoder(nn.Module):
         ]
 
         # passing the query states through the decoder layers
-        for layer in decoder_layers:
+        for i, layer in enumerate(decoder_layers):
             query_states = layer(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,

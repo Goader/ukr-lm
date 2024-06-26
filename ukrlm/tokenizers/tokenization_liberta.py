@@ -29,15 +29,11 @@ logger = logging.get_logger(__name__)
 
 VOCAB_FILES_NAMES = {"vocab_file": "spm.model"}
 
-PRETRAINED_VOCAB_FILES_MAP = {
-    "vocab_file": {
-        "liberta-base":
-            "https://github.com/Goader/ukr-lm/blob/master/research/tokenizer/experiment-5-overall-v2/spm.model",
-    }
-}
+PRETRAINED_VOCAB_FILES_MAP = {}
 
 PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES = {
-    "liberta-base": 512,
+    "liberta-test": 512,
+    "liberta-large": 512,
 }
 
 SPIECE_UNDERLINE = "▁"
@@ -130,7 +126,6 @@ class LibertaTokenizer(PreTrainedTokenizer):
         **kwargs,
     ) -> None:
         # Mask token behave like a normal word, i.e. include the space before it
-        # FIXME is it correct?
         mask_token = AddedToken(mask_token, lstrip=True, rstrip=False) if isinstance(mask_token, str) else mask_token
 
         self.sp_model_kwargs = {} if sp_model_kwargs is None else sp_model_kwargs

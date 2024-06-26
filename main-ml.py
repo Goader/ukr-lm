@@ -48,7 +48,7 @@ def train(
         # fast_dev_run=True,
         max_epochs=cfg.task.max_epochs,
         max_steps=cfg.task.max_steps,
-        val_check_interval=cfg.task.val_check_interval,
+        val_check_interval=0.1,
         log_every_n_steps=cfg.task.log_every_n_steps,
         accelerator=cfg.accelerator,
         devices=cfg.devices,
@@ -181,8 +181,14 @@ def main(cfg: DictConfig):
 
     match cfg.task.name:
         case 'masked-language-modeling':
+            if 'model' not in locals():
+                raise ValueError('model must be defined for MLM task. '
+                                 'You have probably chosen a wrong model.')
             task = MaskedLanguageModelingTask(cfg, model)
         case 'replaced-token-detection':
+            if 'generator' not in locals() or 'discriminator' not in locals():
+                raise ValueError('generator and discriminator must be defined for RTD task. '
+                                 'You have probably chosen a wrong model.')
             task = ReplacedTokenDetectionTask(cfg, generator, discriminator)
         case _:
             raise ValueError(

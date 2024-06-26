@@ -110,6 +110,15 @@ class DataCollatorForNgramMasking(DataCollatorMixin):
 
         # If special token mask has been preprocessed, get it from the dict.
         special_tokens_mask = batch.get('special_tokens_mask', None)
+
+        # FIXME !!!!!!!!!
+        if special_tokens_mask is None:
+            special_tokens_mask = [
+                self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in batch['input_ids']
+            ]
+            special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
+            batch['special_tokens_mask'] = special_tokens_mask
+
         batch['input_ids'], batch['labels'] = self.torch_mask_tokens(
             batch['input_ids'], special_tokens_mask=special_tokens_mask
         )

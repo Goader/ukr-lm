@@ -170,6 +170,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
         ) if self.cfg.task.strategy == 'ddp' else None
 
     def train_dataloader(self):
+        print('train dataset', self.joined_train_dataset)
         if not self.tokenizer or not self.collator:
             raise RuntimeError('Tokenizer and collator must be initialized before training dataloader')
 
