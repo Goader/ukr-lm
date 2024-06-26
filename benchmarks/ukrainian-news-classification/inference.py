@@ -15,7 +15,7 @@ from ukrlm.utils import load_ckpt
 
 
 DEFAULT_TOKENIZER_PATH = \
-    Path(__file__).parent.parent.parent / 'research' / 'tokenizer' / 'experiment-5-overall-v2' / 'spm.model'
+    Path(__file__).parent.parent.parent / 'research' / 'tokenizer' / 'experiment-6-liberta-v2' / 'spm.model'
 
 
 if __name__ == '__main__':
