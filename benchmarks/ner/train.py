@@ -9,6 +9,8 @@ from transformers import (
     TrainingArguments,
     Trainer,
     AutoTokenizer,
+    AutoConfig,
+    AutoModelForMaskedLM,
     AutoModelForTokenClassification,
     DataCollatorForTokenClassification,
     set_seed,
@@ -117,8 +119,14 @@ if __name__ == '__main__':
         )
         tokenizer = LibertaTokenizer(args.tokenizer)
     else:
-        model = AutoModelForTokenClassification.from_pretrained(
-            args.checkpoint,
+        # this should not cause the random state to change
+        real_model = AutoModelForMaskedLM.from_pretrained(args.checkpoint)
+        config = AutoConfig.from_pretrained(args.checkpoint)
+
+        # setting the random generator state to be the same, as loading from checkpoint
+        AutoModelForMaskedLM.from_config(config)
+        model = convert_model(
+            real_model,
             num_labels=len(label_names),
             finetuning_task=finetuning_task
         )

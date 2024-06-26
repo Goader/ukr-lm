@@ -22,6 +22,8 @@ class StepOutput:
     rtd_loss: torch.Tensor
     mlm_logits: torch.Tensor
     rtd_logits: torch.Tensor
+    mlm_labels: torch.LongTensor
+    rtd_labels: torch.LongTensor
 
 
 class ReplacedTokenDetectionTask(pl.LightningModule):
@@ -53,9 +55,12 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
 
         self.rtd_f1 = F1Score(
             task='binary',
+            threshold=0.0,
             ignore_index=-100,
             validate_args=True,
         )
+
+        self.local_step = 0
 
     def _mlm_accuracy(self, logits, labels) -> float:
         with torch.no_grad():
@@ -65,8 +70,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
 
     def _rtd_f1(self, logits, labels) -> float:
         with torch.no_grad():
-            flattened_shape = (-1, logits.size()[-1])
-            rtd_f1 = self.rtd_f1(logits.view(*flattened_shape), labels.view(-1))
+            rtd_f1 = self.rtd_f1(logits.view(-1), labels.view(-1))
             return rtd_f1
 
     def common_step(self, batch, batch_idx) -> StepOutput:
@@ -75,6 +79,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         masked_tokens = batch['labels'] != -100
         mlm_input_ids = batch['input_ids']
         attention_mask = batch['attention_mask']
+        special_tokens_mask = batch.pop('special_tokens_mask')
 
         # mlm phase
         mlm_output = self.generator(**batch)
@@ -82,13 +87,19 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         mlm_logits = mlm_output.logits
 
         # prepare inputs for rtd phase
-        predicted_tokens = mlm_logits.argmax(dim=-1)  # TODO what if we use topk sampling?
-
-        # FIXME do these predicted_tokens need to be detached?
+        # TODO what if we use topk sampling?
+        predicted_tokens = mlm_logits.argmax(dim=-1)  # already detached after `argmax`
 
         rtd_input_ids = mlm_input_ids.clone()
         rtd_input_ids[masked_tokens] = predicted_tokens[masked_tokens]
-        labels = torch.where(attention_mask, rtd_input_ids != mlm_input_ids, -100).long()  # FIXME special tokens?
+
+        # we ignore special tokens, because they are not being replaced
+        # the rest are being set to 1 if they have been replaced by the generator, 0 otherwise
+        labels = torch.where(
+            special_tokens_mask == 0,
+            rtd_input_ids != mlm_input_ids,
+            -100
+        ).long()
 
         # rtd phase
         generator_word_embeddings = self.generator.get_input_embeddings()
@@ -104,25 +115,32 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         rtd_logits = rtd_output.logits
 
         return StepOutput(
-            loss=mlm_loss + self.cfg.task.rdt_lambda * rtd_loss,
+            loss=mlm_loss + self.cfg.task.rtd_lambda * rtd_loss,
             mlm_loss=mlm_loss,
             rtd_loss=rtd_loss,
             mlm_logits=mlm_logits,
             rtd_logits=rtd_logits,
+            mlm_labels=batch['labels'],
+            rtd_labels=labels,
         )
 
     def training_step(self, batch, batch_idx):
         batch_ids = batch['id']
-        if self.trainer.global_step < self.trainer.log_every_n_steps + 1:
+        if min(self.trainer.global_step, self.local_step) < self.trainer.log_every_n_steps + 1:
             print(f'global_rank: {self.global_rank}, global_step: {self.global_step}, batch_ids: {batch_ids}')
+
+            if min(self.trainer.global_step, self.local_step) < 10:
+                print(f'global_rank: {self.global_rank}, input_ids: {batch["input_ids"][:5, :10]}')
+
+            self.local_step += 1  # we do not need to increment it any further after initial logging
         del batch['id']
 
         output = self.common_step(batch, batch_idx)
 
         # optimizes by not computing accuracy in every step, but only in log_every_n_steps
         if (self.trainer.global_step + 1) % self.trainer.log_every_n_steps == 0:
-            mlm_accuracy = self._mlm_accuracy(output.mlm_logits, batch['labels'])
-            rtd_f1 = self._rtd_f1(output.rtd_logits, batch['labels'])
+            mlm_accuracy = self._mlm_accuracy(output.mlm_logits, output.mlm_labels)
+            rtd_f1 = self._rtd_f1(output.rtd_logits, output.rtd_labels)  # FIXME shouldn't work
 
             self.log('train_mlm_loss', output.mlm_loss, on_step=True, logger=True)
             self.log('train_perplexity', torch.exp(output.mlm_loss), on_step=True, prog_bar=True, logger=True)
@@ -142,8 +160,8 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         output = self.common_step(batch, batch_idx)
 
-        mlm_accuracy = self._mlm_accuracy(output.mlm_logits, batch['labels'])
-        rtd_f1 = self._rtd_f1(output.rtd_logits, batch['labels'])
+        mlm_accuracy = self._mlm_accuracy(output.mlm_logits, output.mlm_labels)
+        rtd_f1 = self._rtd_f1(output.rtd_logits, output.rtd_labels)
 
         self.log('val_mlm_loss', output.mlm_loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         self.log('val_perplexity', torch.exp(output.mlm_loss), on_step=True, on_epoch=True, logger=True, sync_dist=True)
@@ -159,8 +177,8 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         output = self.common_step(batch, batch_idx)
 
-        mlm_accuracy = self._mlm_accuracy(output.mlm_logits, batch['labels'])
-        rtd_f1 = self._rtd_f1(output.rtd_logits, batch['labels'])
+        mlm_accuracy = self._mlm_accuracy(output.mlm_logits, output.mlm_labels)
+        rtd_f1 = self._rtd_f1(output.rtd_logits, output.rtd_labels)
 
         self.log('test_mlm_loss', output.mlm_loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         self.log('test_perplexity', torch.exp(output.mlm_loss), on_step=True, on_epoch=True, logger=True, sync_dist=True)
@@ -177,7 +195,8 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.hparams.task.learning_rate,
-            weight_decay=self.hparams.task.weight_decay
+            weight_decay=self.hparams.task.weight_decay,
+            betas=(self.hparams.task.adam_beta1, self.hparams.task.adam_beta2),
         )
         scheduler = instantiate_scheduler(optimizer, self.cfg)
 
@@ -189,17 +208,12 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
             }
         }
 
+    def on_train_epoch_start(self) -> None:
+        # setting the epoch for the distributed sampler
+        self.trainer.train_dataloader.sampler.set_epoch(self.current_epoch)
+
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        checkpoint['config'] = self.model.config
-        if self.cfg.task.use_flash_attention:
-            reversed = self.model.reverse_bettertransformer()
-            checkpoint['state_dict'] = reversed.state_dict()
+        checkpoint['huggingface_config'] = self.model.config
 
-
-    # TODO does this work? implement this
-    # def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-    #     config = checkpoint['config']
-    #     model = AutoModelForMaskedLM.from_config(config)
-    #     model.load_state_dict(checkpoint['state_dict'])
-    #     model = model.to_bettertransformer()
-    #     # FIXME this should be a class method
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        self.local_step = 0
