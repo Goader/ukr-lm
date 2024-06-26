@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Optional
+import os
 
 import torch
 import evaluate
@@ -24,7 +25,7 @@ from ukrlm.utils import load_ckpt
 
 
 DEFAULT_TOKENIZER_PATH = \
-    Path(__file__).parent.parent.parent / 'research' / 'tokenizer' / 'experiment-5-overall-v2' / 'spm.model'
+    Path(__file__).parent.parent.parent / 'research' / 'tokenizer' / 'experiment-6-liberta-v2' / 'spm.model'
 
 
 def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None) -> DatasetDict | Dataset | IterableDatasetDict | IterableDataset:
@@ -128,9 +129,14 @@ if __name__ == '__main__':
         model = convert_model(
             real_model,
             num_labels=len(label_names),
-            finetuning_task=finetuning_task
+            finetuning_task=finetuning_task,
+            token=os.getenv('HF_TOKEN', None),
+            trust_remote_code=True,
         )
-        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.tokenizer,
+            trust_remote_code=True,
+        )
 
     print(label_names)
     print(dataset['train'].features[label_column_name].feature.num_classes)
@@ -176,7 +182,7 @@ if __name__ == '__main__':
     trainer = Trainer(
         model=model,
         args=TrainingArguments(
-            output_dir='models',
+            output_dir=f'models/{args.dataset}-seed{args.seed}',
             evaluation_strategy='epoch',
             save_strategy='epoch',
             learning_rate=args.learning_rate,
