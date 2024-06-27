@@ -121,7 +121,11 @@ if __name__ == '__main__':
         tokenizer = LibertaTokenizer(args.tokenizer)
     else:
         # this should not cause the random state to change
-        real_model = AutoModelForMaskedLM.from_pretrained(args.checkpoint)
+        real_model = AutoModelForMaskedLM.from_pretrained(
+            args.checkpoint,
+            token=os.getenv('HF_TOKEN', None),
+            trust_remote_code=True,
+        )
         config = AutoConfig.from_pretrained(args.checkpoint)
 
         # setting the random generator state to be the same, as loading from checkpoint
@@ -130,8 +134,6 @@ if __name__ == '__main__':
             real_model,
             num_labels=len(label_names),
             finetuning_task=finetuning_task,
-            token=os.getenv('HF_TOKEN', None),
-            trust_remote_code=True,
         )
         tokenizer = AutoTokenizer.from_pretrained(
             args.tokenizer,
