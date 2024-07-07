@@ -72,16 +72,11 @@ def align_entities(sentence: str, entities: list[tuple[int, int, str]]) -> tuple
     for token in tokens[:-1]:
         token_offsets.append(token_offsets[-1] + len(token) + 1)  # +1 for space
 
-    # print(len(tokens), len(token_offsets))
-    # print(list(zip(tokens, token_offsets)))
-
     for start, end, entity_type in entities:
         for i, offset in enumerate(token_offsets):
             if start <= offset and end >= offset + len(tokens[i]):
                 if ner_tags[i] != 'O':
-                    print('Overlapping entities:', sentence, entities)
-                    print()
-                    1/0
+                    raise ValueError(f'Overlapping entities: {sentence} and {entities}')
 
                 if start == offset:
                     ner_tags[i] = f'B-{entity_type}'
@@ -103,9 +98,6 @@ def process_file(text_path: Path, ann_path: Path) -> list[tuple[list[str], list[
 
     entities = remove_overlapping_entities(entities)
 
-    # print(sentences[0])
-    # print(sentences)
-
     documents = []
     for sentence, offset in sentences:
         entities_in_sentence = [
@@ -116,8 +108,6 @@ def process_file(text_path: Path, ann_path: Path) -> list[tuple[list[str], list[
         tokens, ner_tags = align_entities(sentence, entities_in_sentence)
 
         documents.append((tokens, ner_tags))
-
-        # 1/0
 
     return documents
 
@@ -217,11 +207,10 @@ if __name__ == '__main__':
 
         for source, files in paths.items():
             for file_id, file_paths in files.items():
-                # print(file_id)
                 sentences = process_file(file_paths['text'], file_paths['ann'])
                 for tokens, ner_tags in sentences:
                     documents.append({
-                        'document_id': f'{source}_{file_id}',
+                        'document_id': f'{file_id}',
                         'tokens': tokens,
                         'ner_tags': ner_tags,
                         'source': source

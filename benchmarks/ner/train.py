@@ -109,7 +109,7 @@ if __name__ == '__main__':
         set_seed(args.seed)
 
     dataset = load_huggingface_dataset(args.dataset)
-    label_column_name = 'ner_tags' if args.dataset in ['wikiann', 'ner-uk'] else 'pos_tags'
+    label_column_name = 'ner_tags' if args.dataset in ['wikiann', 'ner-uk', 'ner-uk-2.0'] else 'pos_tags'
     label_names = dataset['train'].features[label_column_name].feature.names
     finetuning_task = 'pos' if args.dataset in ['universal-dependencies'] else 'ner'
 
