@@ -117,8 +117,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset-path', type=str, required=True, help='path to the dataset')
     parser.add_argument('--repository', type=str, required=False, default=None, help='name of the repository')
     parser.add_argument('--output_dir', type=str, required=False, default=None, help='output directory')
-    parser.add_argument('--dev-split', type=float, default=0.1, help='fraction of the dataset to be used for '
-                                                                     'the dev split')
+    parser.add_argument('--validation-split', type=float, default=0.1, help='fraction of the dataset to be used for '
+                                                                     'the validation split')
     parser.add_argument('--seed', type=int, default=0, help='random seed for reproducibility')
     parser.add_argument('--commit-message', type=str, default='Pushing dataset to the hub', help='commit message')
     args = parser.parse_args()
@@ -129,7 +129,7 @@ if __name__ == '__main__':
     print('Reading in the dev-test split...')
 
     train_ids = set()
-    dev_ids = set()
+    validation_ids = set()
     test_ids = set()
 
     path = Path(args.dataset_path)
@@ -146,18 +146,18 @@ if __name__ == '__main__':
     print('Count of test IDs:', len(test_ids))
     print()
 
-    # creating the dev split
-    print('Creating the dev split...')
+    # creating the validation split
+    print('Creating the validation split...')
 
-    train_dev = list(train_ids)
-    random.shuffle(train_dev)
+    train_validation = list(train_ids)
+    random.shuffle(train_validation)
 
-    dev_count = int(args.dev_split * len(train_dev))
-    train_ids = set(train_dev[dev_count:])
-    dev_ids = set(train_dev[:dev_count])
+    validation_count = int(args.validation_split * len(train_validation))
+    train_ids = set(train_validation[validation_count:])
+    validation_ids = set(train_validation[:validation_count])
 
     print('Count of train IDs:', len(train_ids))
-    print('Count of dev IDs:', len(dev_ids))
+    print('Count of validation IDs:', len(validation_ids))
     print('Count of test IDs:', len(test_ids))
     print()
 
@@ -165,7 +165,7 @@ if __name__ == '__main__':
     print('Mapping onto filepaths...')
 
     train_paths = dict()
-    dev_paths = dict()
+    validation_paths = dict()
     test_paths = dict()
 
     for folder in path.iterdir():
@@ -173,7 +173,7 @@ if __name__ == '__main__':
             continue
 
         train_paths[folder.name] = dict()
-        dev_paths[folder.name] = dict()
+        validation_paths[folder.name] = dict()
         test_paths[folder.name] = dict()
 
         for file in folder.iterdir():
@@ -181,8 +181,8 @@ if __name__ == '__main__':
 
             if file_id in train_ids:
                 aggregator = train_paths[folder.name]
-            elif file_id in dev_ids:
-                aggregator = dev_paths[folder.name]
+            elif file_id in validation_ids:
+                aggregator = validation_paths[folder.name]
             elif file_id in test_ids:
                 aggregator = test_paths[folder.name]
             else:
@@ -195,14 +195,14 @@ if __name__ == '__main__':
             }
 
     print('Count of train files:', sum(len(files) for files in train_paths.values()))
-    print('Count of dev files:', sum(len(files) for files in dev_paths.values()))
+    print('Count of validation files:', sum(len(files) for files in validation_paths.values()))
     print('Count of test files:', sum(len(files) for files in test_paths.values()))
     print()
 
     # creating the dataset
     dataset = DatasetDict()
 
-    for split, paths in [('train', train_paths), ('dev', dev_paths), ('test', test_paths)]:
+    for split, paths in [('train', train_paths), ('validation', validation_paths), ('test', test_paths)]:
         documents = []
 
         for source, files in paths.items():
@@ -227,7 +227,7 @@ if __name__ == '__main__':
     print('Mapping ner_tags onto the ClassLabel...')
 
     unique_ner_tags = set()
-    for split in ['train', 'dev', 'test']:
+    for split in ['train', 'validation', 'test']:
         for ner_tags in dataset[split]['ner_tags']:
             unique_ner_tags.update(ner_tags)
 
