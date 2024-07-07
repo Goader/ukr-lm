@@ -33,6 +33,8 @@ def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None)
         dataset = load_dataset('wikiann', 'uk', cache_dir=cache_dir)
     elif dataset_name == 'ner-uk':
         dataset = load_dataset('benjamin/ner-uk', cache_dir=cache_dir)
+    elif dataset_name == 'ner-uk-2.0':
+        dataset = load_dataset('Goader/ner-uk-2.0', cache_dir=cache_dir)
     elif dataset_name == 'universal-dependencies':
         dataset = load_dataset('universal_dependencies', 'uk_iu', cache_dir=cache_dir)
         dataset = dataset.rename_column('upos', 'pos_tags')
@@ -90,7 +92,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--checkpoint', type=str, required=True, help='path to the CKPT file or HuggingFace checkpoint')
     parser.add_argument('--tokenizer', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
-    parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk', 'universal-dependencies'],
+    parser.add_argument('--dataset', type=str, choices=['wikiann', 'ner-uk', 'universal-dependencies', 'ner-uk-2.0'],
                         required=True, help='name of the dataset to train on')
     parser.add_argument('--epochs', type=int, default=5, help='number of epochs to train the model')
     parser.add_argument('--batch_size', type=int, default=16, help='batch size for training and evaluation')
