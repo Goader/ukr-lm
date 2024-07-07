@@ -102,6 +102,8 @@ if __name__ == '__main__':
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help='warmup ratio for the learning rate scheduler')
     parser.add_argument('--weight_decay', type=float, default=0.01, help='weight decay for the optimizer')
     parser.add_argument('--load_best_model', action='store_true', help='load the best model at the end of training')
+    parser.add_argument('--repeat_reproducibility', action='store_true', help='repeat the weights initialization '
+                                                                              'for reproducibility')
     parser.add_argument('--seed', type=int, default=None, help='random seed for reproducibility')
     args = parser.parse_args()
 
@@ -121,7 +123,7 @@ if __name__ == '__main__':
             finetuning_task=finetuning_task
         )
         tokenizer = LibertaTokenizer(args.tokenizer)
-    else:
+    elif args.repeat_reproducibility:
         # this should not cause the random state to change
         real_model = AutoModelForMaskedLM.from_pretrained(
             args.checkpoint,
@@ -136,6 +138,17 @@ if __name__ == '__main__':
             real_model,
             num_labels=len(label_names),
             finetuning_task=finetuning_task,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.tokenizer,
+            trust_remote_code=True,
+        )
+    else:
+        model = AutoModelForTokenClassification.from_pretrained(
+            args.checkpoint,
+            num_labels=len(label_names),
+            token=os.getenv('HF_TOKEN', None),
+            trust_remote_code=True,
         )
         tokenizer = AutoTokenizer.from_pretrained(
             args.tokenizer,
