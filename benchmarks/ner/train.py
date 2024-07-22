@@ -152,6 +152,7 @@ if __name__ == '__main__':
         )
         tokenizer = AutoTokenizer.from_pretrained(
             args.tokenizer,
+            add_prefix_space=True,
             trust_remote_code=True,
         )
 
