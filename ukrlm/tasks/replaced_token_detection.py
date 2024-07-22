@@ -197,6 +197,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
             lr=self.hparams.task.learning_rate,
             weight_decay=self.hparams.task.weight_decay,
             betas=(self.hparams.task.adam_beta1, self.hparams.task.adam_beta2),
+            eps=self.hparams.task.adam_epsilon,
         )
         scheduler = instantiate_scheduler(optimizer, self.cfg)
 
