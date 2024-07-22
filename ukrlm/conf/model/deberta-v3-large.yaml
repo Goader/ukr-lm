@@ -1,4 +1,4 @@
-name: "deberta-v3-base"
+name: "deberta-v3-large"
 checkpoint_path: null
 max_position_embeddings: 512
 vocab_size: 64000
