@@ -46,6 +46,7 @@ def train(
         profiler=cfg.profiler,
         # overfit_batches=4,
         # fast_dev_run=True,
+        # detect_anomaly=True,
         max_epochs=cfg.task.max_epochs,
         max_steps=cfg.task.max_steps,
         val_check_interval=0.1,

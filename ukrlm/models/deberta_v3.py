@@ -121,23 +121,39 @@ class DebertaV3ForRTD(nn.Module):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
+            output_attentions=True,
             output_hidden_states=output_hidden_states,
         )
 
         sequence_output = outputs.last_hidden_state
         logits = self.cls(sequence_output)
 
+        print('seq_output', sequence_output[:5, 3, :5])
+        print('logits', logits[:5, :5])
+
+        # for layer_no, att in enumerate(outputs.attentions):
+        #     print('attentions, layer', layer_no, att.min(), att.max())
+        #     print(att)
+
         loss = None
         if labels is not None:
             loss_fct = nn.BCEWithLogitsLoss()
+            # loss_fct = nn.CrossEntropyLoss()
+            # print('logits', logits.size(), 'labels', labels.size())
+            # logits = logits.view(-1, 2)
+            # labels = labels.view(-1)
+            print('logits', logits.size(), 'labels', labels.size(), labels.dtype)
+            print(logits)
+            print(labels)
+            # loss = loss_fct(logits, labels.long())
+            # logits = torch.clamp(logits, min=-0.1, max=0.1)
             loss = loss_fct(logits.view(-1), labels.view(-1).float())
 
         return RTDOutput(
             loss=loss,
             logits=logits,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
+            hidden_states=outputs.hidden_states if output_hidden_states else None,
+            attentions=outputs.attentions if output_attentions else None,
         )
 
 
@@ -239,5 +255,5 @@ class DebertaV3ForMLM(nn.Module):
             loss=loss,
             logits=logits,
             hidden_states=outputs.hidden_states if output_hidden_states else None,
-            attentions=outputs.attentions,
+            attentions=outputs.attentions if output_attentions else None,
         )
