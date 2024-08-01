@@ -1,3 +1,4 @@
+
 from typing import Dict, Any
 from dataclasses import dataclass
 
@@ -40,6 +41,10 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         self.generator = generator
         self.discriminator = discriminator
 
+        # deactivating discriminator's word embeddings
+        # for param in self.discriminator.deberta.embeddings.word_embeddings.parameters():
+        #     param.requires_grad = False
+
         self.delta_embeddings = nn.Embedding(
             num_embeddings=cfg.model.vocab_size,
             embedding_dim=discriminator.config.hidden_size,
@@ -79,6 +84,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         masked_tokens = batch['labels'] != -100
         mlm_input_ids = batch['input_ids']
         attention_mask = batch['attention_mask']
+        mlm_labels = batch['labels']
         special_tokens_mask = batch.pop('special_tokens_mask')
 
         # mlm phase
@@ -90,6 +96,9 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         # TODO what if we use topk sampling?
         predicted_tokens = mlm_logits.argmax(dim=-1)  # already detached after `argmax`
 
+        real_tokens = mlm_input_ids.clone()
+        real_tokens[masked_tokens] = mlm_labels[masked_tokens]
+
         rtd_input_ids = mlm_input_ids.clone()
         rtd_input_ids[masked_tokens] = predicted_tokens[masked_tokens]
 
@@ -97,15 +106,19 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         # the rest are being set to 1 if they have been replaced by the generator, 0 otherwise
         labels = torch.where(
             special_tokens_mask == 0,
-            rtd_input_ids != mlm_input_ids,
+            rtd_input_ids != real_tokens,
             -100
         ).long()
 
         # rtd phase
-        generator_word_embeddings = self.generator.get_input_embeddings()
+        generator_word_embeddings = self.discriminator.get_input_embeddings()
         # not allowing RTD to update the generator, so it won't make its life easier by worsening the generator
-        inputs_embeds = generator_word_embeddings(rtd_input_ids).detach() + self.delta_embeddings(rtd_input_ids)
+        # with torch.no_grad():
+        inputs_embeds = generator_word_embeddings(rtd_input_ids)
 
+        inputs_embeds = inputs_embeds + 0 * self.delta_embeddings(rtd_input_ids)
+
+        print('labels', labels[:5, :5])
         rtd_output = self.discriminator(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -114,15 +127,32 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         rtd_loss = rtd_output.loss
         rtd_logits = rtd_output.logits
 
+        print('mlm_loss', mlm_loss)
+        print('rtd_loss', rtd_loss)
+        print('delta_embeddings', self.delta_embeddings.weight[:5, :5])
+
+        print('rtd_logits min max', rtd_logits.min(), rtd_logits.max())
+
         return StepOutput(
             loss=mlm_loss + self.cfg.task.rtd_lambda * rtd_loss,
             mlm_loss=mlm_loss,
             rtd_loss=rtd_loss,
             mlm_logits=mlm_logits,
             rtd_logits=rtd_logits,
-            mlm_labels=batch['labels'],
+            mlm_labels=mlm_labels,
             rtd_labels=labels,
         )
+
+    def on_after_backward(self):
+        for name, param in self.named_parameters():
+            if param.grad is None:
+                print(name + " none grad")
+                continue
+            if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
+                print(name + " NaN or Inf in gradients before reducing")
+                print('any inf', torch.isinf(param.grad).any())
+                print('min and max grad apart from nan', torch.nan_to_num(param.grad).min(), torch.nan_to_num(param.grad).max())
+            print(name, '\nmin and max grad', torch.nan_to_num(param.grad).min(), torch.nan_to_num(param.grad).max())
 
     def training_step(self, batch, batch_idx):
         batch_ids = batch['id']
@@ -140,7 +170,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         # optimizes by not computing accuracy in every step, but only in log_every_n_steps
         if (self.trainer.global_step + 1) % self.trainer.log_every_n_steps == 0:
             mlm_accuracy = self._mlm_accuracy(output.mlm_logits, output.mlm_labels)
-            rtd_f1 = self._rtd_f1(output.rtd_logits, output.rtd_labels)  # FIXME shouldn't work
+            rtd_f1 = 0 # self._rtd_f1(output.rtd_logits, output.rtd_labels)  # FIXME shouldn't work
 
             self.log('train_mlm_loss', output.mlm_loss, on_step=True, logger=True)
             self.log('train_perplexity', torch.exp(output.mlm_loss), on_step=True, prog_bar=True, logger=True)
@@ -149,7 +179,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
             self.log('train_rtd_loss', output.rtd_loss, on_step=True, logger=True)
             self.log('train_rtd_f1', rtd_f1, on_step=True, logger=True)
 
-            self.log('train_loss', output.loss, on_step=True, logger=True)
+            #self.log('train_loss', output.loss, on_step=True, logger=True)
 
             # wandb logs only for the main process, we need grouping to log for all processes
             self.log(f'batch_ids[0]-global_rank-{self.global_rank}', batch_ids[0],
@@ -161,7 +191,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         output = self.common_step(batch, batch_idx)
 
         mlm_accuracy = self._mlm_accuracy(output.mlm_logits, output.mlm_labels)
-        rtd_f1 = self._rtd_f1(output.rtd_logits, output.rtd_labels)
+        rtd_f1 = 0 # self._rtd_f1(output.rtd_logits, output.rtd_labels)
 
         self.log('val_mlm_loss', output.mlm_loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         self.log('val_perplexity', torch.exp(output.mlm_loss), on_step=True, on_epoch=True, logger=True, sync_dist=True)
@@ -170,7 +200,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         self.log('val_rtd_loss', output.rtd_loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         self.log('val_rtd_f1', rtd_f1, on_step=True, on_epoch=True, logger=True, sync_dist=True)
 
-        self.log('val_loss', output.loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        # self.log('val_loss', output.loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
 
         return output.loss
 
@@ -178,7 +208,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         output = self.common_step(batch, batch_idx)
 
         mlm_accuracy = self._mlm_accuracy(output.mlm_logits, output.mlm_labels)
-        rtd_f1 = self._rtd_f1(output.rtd_logits, output.rtd_labels)
+        rtd_f1 = 0 # self._rtd_f1(output.rtd_logits, output.rtd_labels)
 
         self.log('test_mlm_loss', output.mlm_loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         self.log('test_perplexity', torch.exp(output.mlm_loss), on_step=True, on_epoch=True, logger=True, sync_dist=True)
@@ -187,7 +217,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         self.log('test_rtd_loss', output.rtd_loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         self.log('test_rtd_f1', rtd_f1, on_step=True, on_epoch=True, logger=True, sync_dist=True)
 
-        self.log('test_loss', output.loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        # self.log('test_loss', output.loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
 
         return output.loss
 
@@ -211,7 +241,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
 
     def on_train_epoch_start(self) -> None:
         # setting the epoch for the distributed sampler
-        self.trainer.train_dataloader.sampler.set_epoch(self.current_epoch)
+        pass # self.trainer.train_dataloader.sampler.set_epoch(self.current_epoch)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         checkpoint['huggingface_config'] = self.model.config
