@@ -162,12 +162,12 @@ def main(cfg: DictConfig):
                 relative_attention=True,
                 position_biased_input=False,
                 pos_att_type='p2c|c2p',
-                # TODO
             )
 
             generator_config = DebertaV2Config.from_dict(
                 discriminator_config.to_dict(),
                 num_hidden_layers=cfg.model.generator_n_layers,
+                tie_word_embeddings=cfg.model.tie_word_embeddings,
             )
 
             generator = DebertaV3ForMLM(generator_config)
