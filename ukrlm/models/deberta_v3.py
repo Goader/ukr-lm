@@ -74,7 +74,7 @@ class DebertaV3RTDHead(nn.Module):
             self.transform_act_fn = config.hidden_act
         self.LayerNorm = nn.LayerNorm(self.embedding_size, eps=config.layer_norm_eps)
 
-        self.classifier = nn.Linear(self.embedding_size, 1)
+        self.classifier = nn.Linear(self.embedding_size, 2)
 
     def forward(self, hidden_states):
         # selecting all embeddings for the [CLS] token
@@ -121,33 +121,17 @@ class DebertaV3ForRTD(nn.Module):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
-            output_attentions=True,
+            output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
         )
 
         sequence_output = outputs.last_hidden_state
         logits = self.cls(sequence_output)
 
-        print('seq_output', sequence_output[:5, 3, :5])
-        print('logits', logits[:5, :5])
-
-        # for layer_no, att in enumerate(outputs.attentions):
-        #     print('attentions, layer', layer_no, att.min(), att.max())
-        #     print(att)
-
         loss = None
         if labels is not None:
-            loss_fct = nn.BCEWithLogitsLoss()
-            # loss_fct = nn.CrossEntropyLoss()
-            # print('logits', logits.size(), 'labels', labels.size())
-            # logits = logits.view(-1, 2)
-            # labels = labels.view(-1)
-            print('logits', logits.size(), 'labels', labels.size(), labels.dtype)
-            print(logits)
-            print(labels)
-            # loss = loss_fct(logits, labels.long())
-            # logits = torch.clamp(logits, min=-0.1, max=0.1)
-            loss = loss_fct(logits.view(-1), labels.view(-1).float())
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, 2), labels.view(-1))
 
         return RTDOutput(
             loss=loss,
@@ -213,6 +197,9 @@ class DebertaV3ForMLM(nn.Module):
 
         self.deberta = AutoModel.from_config(config)
         self.decoder = DebertaV3EnhancedMaskDecoder(config)
+
+        if config.tie_word_embeddings:
+            self.decoder.prediction_head.decoder.weight = self.deberta.get_input_embeddings().weight.T
 
     def get_input_embeddings(self) -> nn.Module:
         return self.deberta.get_input_embeddings()
