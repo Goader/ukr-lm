@@ -1,9 +1,4 @@
 name: "masked-language-modeling"
-learning_rate: 1e-4
-weight_decay: 0.01
-adam_beta1: 0.9
-adam_beta2: 0.999
-adam_epsilon: 1e-8
 max_epochs: 1
 max_steps: -1
 gradient_accumulation_steps: 1

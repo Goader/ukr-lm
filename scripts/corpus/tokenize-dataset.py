@@ -1,21 +1,25 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
+from transformers import AutoTokenizer
 
-from ukrlm.tokenizers import LibertaTokenizer
 from ukrlm.datamodules.masked_language_modeling import tokenize_function
 
 
-DEFAULT_TOKENIZER_PATH = Path(__file__).parent.parent \
-                         / 'research' / 'tokenizer' / 'experiment-6-liberta-v2' / 'spm.model'
+# DEFAULT_TOKENIZER_PATH = Path(__file__).parent.parent \
+#                          / 'research' / 'tokenizer' / 'experiment-6-liberta-v2' / 'spm.model'
+DEFAULT_TOKENIZER_PATH = 'Goader/liberta-large-v2'
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--name', type=str, required=True, help='name of the dataset')
+    parser.add_argument('--data_dir', type=str, default=None, help='path to the data directory')
+    parser.add_argument('--load_from_disk', action='store_true', help='load the dataset from disk')
     parser.add_argument('--tokenizer_path', type=str, default=DEFAULT_TOKENIZER_PATH, help='path to the tokenizer')
     parser.add_argument('--output_dir', type=str, required=True, help='path to the output directory')
+    parser.add_argument('--shuffle', action='store_true', help='shuffle the dataset')
     parser.add_argument('--max_length', type=int, default=512, help='max length of the input sequence')
     parser.add_argument('--num_shards', type=int, default=240, help='number of shards')
     parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
@@ -25,7 +29,7 @@ if __name__ == '__main__':
 
     print('Loading the tokenizer...')
 
-    tokenizer = LibertaTokenizer.from_pretrained(args.tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path, trust_remote_code=True)
 
     print('Loading the dataset...')
 
@@ -41,25 +45,19 @@ if __name__ == '__main__':
             use_auth_token=True,
         )
     else:  # filepath
-        # FIXME
-        dataset = load_dataset(
-            path='arrow',
-            data_files=[args.name],
-            split='train',
-            num_proc=args.num_proc,
-        )
+        assert args.data_dir is not None, 'data_dir must be provided'
+        if args.load_from_disk:
+            dataset = load_from_disk(args.data_dir)
+        else:
+            dataset = load_dataset(
+                path='parquet',
+                data_dir=args.data_dir,
+                split='train',
+                num_proc=args.num_proc,
+            )
 
     print('Loaded dataset:')
     print(dataset)
-
-    print('Adding the id column...')
-    dataset = dataset.map(
-        lambda examples, indices: {'id': indices},
-        with_indices=True,
-        batched=True,
-        batch_size=args.batch_size,
-        num_proc=args.num_proc,
-    )
 
     print('Tokenizing the dataset...')
     dataset = dataset.map(
@@ -71,7 +69,20 @@ if __name__ == '__main__':
         num_proc=args.num_proc,
     )
 
-    dataset = dataset.select_columns(['id', 'input_ids'])
+    dataset = dataset.select_columns(['input_ids'])
+
+    if args.shuffle:
+        print('Shuffling the dataset...')
+        dataset = dataset.shuffle(seed=42)
+
+    print('Adding the id column...')
+    dataset = dataset.map(
+        lambda examples, indices: {'id': indices},
+        with_indices=True,
+        batched=True,
+        batch_size=args.batch_size,
+        num_proc=args.num_proc,
+    )
 
     print('Saving the tokenized dataset...')
     dataset.save_to_disk(

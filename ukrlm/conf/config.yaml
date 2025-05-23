@@ -10,8 +10,10 @@ defaults:
       - cc100
       - culturax
       - treebank
+      - ukrcorpus
   - datamodule: masked-language-modeling
   - model: bert-base
   - task: masked-language-modeling
+  - optimizer: adamw
   - scheduler: linear-with-warmup
   - _self_

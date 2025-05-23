@@ -76,6 +76,10 @@ class DataCollatorForNgramMasking(DataCollatorMixin):
         if self.max_ngram_size > 1:
             raise NotImplementedError('Ngram masking with n > 1 is not yet supported.')
 
+        # in case 0 probabilities are passed, we set them to 0.0
+        self.keep_original_probability = float(self.keep_original_probability)
+        self.substitute_probability = float(self.substitute_probability)
+
         self.unigram_start_vocabulary_mask = self._build_ngram_mask()
 
     def _build_ngram_mask(self) -> torch.Tensor:

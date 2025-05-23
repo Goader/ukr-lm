@@ -2,11 +2,13 @@ name: masked-language-modeling
 datasets:
   train:
     - cc100
+    - ukr_corpus
   val:
     - treebank
 batch_size: 96
 num_workers: 4
 pin_memory: false
+max_length: 512
 tokenizer_path: research/tokenizer/experiment-5-overall-v2
 prefetch_factor: 2
 multiprocessing_context: spawn

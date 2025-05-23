@@ -126,7 +126,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 remove_columns=['text'],
                 fn_kwargs=dict(
                     tokenizer=self.tokenizer,
-                    max_length=self.cfg.model.max_position_embeddings
+                    max_length=self.cfg.datamodule.max_length
                 )
             )
 
@@ -149,7 +149,7 @@ class MaskedLanguageModelingDataModule(pl.LightningDataModule):
                 remove_columns=dataset.column_names,
                 fn_kwargs=dict(
                     tokenizer=self.tokenizer,
-                    max_length=self.cfg.model.max_position_embeddings
+                    max_length=self.cfg.datamodule.max_length,
                 )
             ).remove_columns(['id'])  # FIXME we could replace removal with proper integer IDs
 

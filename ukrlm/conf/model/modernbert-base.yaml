@@ -1,0 +1,17 @@
+name: "modernbert-base"
+checkpoint_path: null
+context_extension_phase: false
+global_rope_theta: 160000
+local_rope_theta: 10000
+vocab_size: 64000
+pad_token_id: 0
+unk_token_id: 1
+cls_token_id: 2
+sep_token_id: 3
+mask_token_id: 4
+reference_compile: true
+attn_implementation: flash_attention_2
+tie_weights: true
+initialize:
+  backbone: null
+  embeddings: null

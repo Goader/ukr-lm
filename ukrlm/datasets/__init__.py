@@ -77,6 +77,13 @@ def dataset_by_name(
             )
 
         return dataset
+    elif name == 'ukrcorpus':
+        print('loading ukr-corpus from the disk')
+        dataset = load_from_disk(
+            dataset_path=cfg.datasets.ukrcorpus.tokenized_dataset_path,
+            keep_in_memory=cfg.datasets.ukrcorpus.keep_in_memory,
+        )
+        return dataset
     elif name == 'treebank':
         dataset = load_dataset(
             path='Goader/ukrainian-treebank-lm',

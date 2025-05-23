@@ -12,6 +12,7 @@ from lightning.pytorch.utilities import rank_zero_info
 from torchmetrics.classification import MulticlassAccuracy, F1Score, Precision, Recall
 from transformers import AutoModelForMaskedLM
 
+from ukrlm.optimizers import instantiate_optimizer
 from ukrlm.schedulers import instantiate_scheduler
 from ukrlm.models.deberta_v3 import DebertaV3ForMLM, DebertaV3ForRTD
 
@@ -51,6 +52,9 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
             padding_idx=cfg.model.pad_token_id,
         )
 
+        self.delta_embeddings.weight.data = self.discriminator.get_input_embeddings().weight.data \
+                                          - self.generator.get_input_embeddings().weight.data
+
         self.mlm_accuracy = MulticlassAccuracy(
             num_classes=self.cfg.model.vocab_size,
             average='micro',
@@ -82,6 +86,27 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
             validate_args=True,
         )
 
+        # self.rtd_precision = Precision(
+        #     task='binary',
+        #     threshold=0.0,
+        #     ignore_index=-100,
+        #     validate_args=True,
+        # )
+
+        # self.rtd_recall = Recall(
+        #     task='binary',
+        #     threshold=0.0,
+        #     ignore_index=-100,
+        #     validate_args=True,
+        # )
+
+        # self.rtd_f1 = F1Score(
+        #     task='binary',
+        #     threshold=0.0,
+        #     ignore_index=-100,
+        #     validate_args=True,
+        # )
+
         self.local_step = 0
 
     def _mlm_accuracy(self, logits, labels) -> float:
@@ -93,16 +118,19 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
     def _rtd_precision(self, logits, labels) -> float:
         with torch.no_grad():
             rtd_precision = self.rtd_precision(logits.view(-1, 2), labels.view(-1))[1].item()
+            # rtd_precision = self.rtd_precision(logits.view(-1), labels.view(-1))
             return rtd_precision
 
     def _rtd_recall(self, logits, labels) -> float:
         with torch.no_grad():
             rtd_recall = self.rtd_recall(logits.view(-1, 2), labels.view(-1))[1].item()
+            # rtd_recall = self.rtd_recall(logits.view(-1), labels.view(-1))
             return rtd_recall
 
     def _rtd_f1(self, logits, labels) -> float:
         with torch.no_grad():
             rtd_f1 = self.rtd_f1(logits.view(-1, 2), labels.view(-1))[1].item()
+            # rtd_f1 = self.rtd_f1(logits.view(-1), labels.view(-1))
             return rtd_f1
 
     def common_step(self, batch, batch_idx) -> StepOutput:
@@ -242,13 +270,7 @@ class ReplacedTokenDetectionTask(pl.LightningModule):
         return output.loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.hparams.task.learning_rate,
-            weight_decay=self.hparams.task.weight_decay,
-            betas=(self.hparams.task.adam_beta1, self.hparams.task.adam_beta2),
-            eps=self.hparams.task.adam_epsilon,
-        )
+        optimizer = instantiate_optimizer(self, self.cfg)
         scheduler = instantiate_scheduler(optimizer, self.cfg)
 
         return {

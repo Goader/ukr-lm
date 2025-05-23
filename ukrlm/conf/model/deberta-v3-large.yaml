@@ -8,4 +8,9 @@ cls_token_id: 2
 sep_token_id: 3
 mask_token_id: 4
 generator_n_layers: 12
-tie_word_embeddings: true
+initialize:
+  generator_backbone: null
+  discriminator_backbone: null
+  generator_embeddings: null
+  discriminator_embeddings: null
+

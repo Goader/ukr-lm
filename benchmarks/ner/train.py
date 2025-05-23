@@ -4,6 +4,7 @@ from typing import Optional
 import os
 
 import torch
+import optimi
 import evaluate
 import numpy as np
 from transformers import (
@@ -16,11 +17,14 @@ from transformers import (
     DataCollatorForTokenClassification,
     set_seed,
 )
-from transformers.models.bert.modeling_bert import BertForTokenClassification, BertForMaskedLM
+from transformers.models.bert.modeling_bert import BertForTokenClassification, BertForMaskedLM, BertConfig
+from transformers.models.modernbert.modeling_modernbert import ModernBertForTokenClassification, ModernBertForMaskedLM, ModernBertConfig
+from transformers.optimization import get_linear_schedule_with_warmup
 from datasets import load_dataset, DatasetDict, Dataset, IterableDatasetDict, IterableDataset
 from sklearn.metrics import f1_score, accuracy_score
 
 from ukrlm.tokenizers import LibertaTokenizer
+from ukrlm.optimizers import param_groups_weight_decay
 from ukrlm.utils import load_ckpt
 
 
@@ -31,24 +35,37 @@ DEFAULT_TOKENIZER_PATH = \
 def load_huggingface_dataset(dataset_name: str, cache_dir: Optional[str] = None) -> DatasetDict | Dataset | IterableDatasetDict | IterableDataset:
     if dataset_name == 'wikiann':
         dataset = load_dataset('wikiann', 'uk', cache_dir=cache_dir)
+
     elif dataset_name == 'ner-uk':
         dataset = load_dataset('benjamin/ner-uk', cache_dir=cache_dir)
+        # fixing the fact that datasets do not download the dataset_infos.json correctly 🤦‍♂️
+        for split in dataset.keys():
+            dataset[split].features['ner_tags'].feature.names \
+                = ["O", "B-PERS", "I-PERS", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "B-MISC", "I-MISC"]
+
     elif dataset_name == 'ner-uk-2.0':
         dataset = load_dataset('Goader/ner-uk-2.0', cache_dir=cache_dir)
+
     elif dataset_name == 'universal-dependencies':
         dataset = load_dataset('universal_dependencies', 'uk_iu', cache_dir=cache_dir)
         dataset = dataset.rename_column('upos', 'pos_tags')
+
     else:
         raise ValueError(f'unknown dataset for this script - {dataset_name}')
+
     return dataset
 
 
-def convert_model(model: BertForMaskedLM, num_labels: int, finetuning_task: str) -> BertForTokenClassification:
+def convert_model(model: BertForMaskedLM | ModernBertForMaskedLM, num_labels: int, finetuning_task: str) -> BertForTokenClassification | ModernBertForTokenClassification:
     model.config.num_labels = num_labels
     model.config.finetuning_task = finetuning_task
     clf = AutoModelForTokenClassification.from_config(model.config)
-    clf.bert.embeddings.load_state_dict(model.bert.embeddings.state_dict())
-    clf.bert.encoder.load_state_dict(model.bert.encoder.state_dict())
+    if isinstance(model, BertForMaskedLM):
+        clf.bert.embeddings.load_state_dict(model.bert.embeddings.state_dict())
+        clf.bert.encoder.load_state_dict(model.bert.encoder.state_dict())
+    else:
+        clf.model.load_state_dict(model.model.state_dict())
+        clf.head.load_state_dict(model.head.state_dict())
     return clf
 
 
@@ -101,6 +118,8 @@ if __name__ == '__main__':
     parser.add_argument('--scheduler_type', type=str, default='linear', help='type of the learning rate scheduler')
     parser.add_argument('--warmup_ratio', type=float, default=0.0, help='warmup ratio for the learning rate scheduler')
     parser.add_argument('--weight_decay', type=float, default=0.01, help='weight decay for the optimizer')
+    parser.add_argument('--optimizer', type=str, default='adamw', choices=['adamw', 'stableadamw'], help='optimizer to use')
+    parser.add_argument('--decouple_lr', action='store_true', help='decouple the learning rate for the optimizer')
     parser.add_argument('--load_best_model', action='store_true', help='load the best model at the end of training')
     parser.add_argument('--repeat_reproducibility', action='store_true', help='repeat the weights initialization '
                                                                               'for reproducibility')
@@ -197,6 +216,19 @@ if __name__ == '__main__':
 
     main_metric = 'overall_accuracy' if args.dataset in ['universal-dependencies'] else 'overall_f1'
 
+    if args.optimizer == 'stableadamw':
+        optimizer_cls = optimi.StableAdamW
+        optimizer_kwargs = {
+            'lr': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            'decouple_lr': args.decouple_lr,
+        }
+        optimizer_cls_and_kwargs = (optimizer_cls, optimizer_kwargs)
+    elif args.optimizer == 'adamw':
+        optimizer_cls_and_kwargs = None
+    else:
+        raise ValueError(f'unknown optimizer: {args.optimizer}')
+
     trainer = Trainer(
         model=model,
         args=TrainingArguments(
@@ -218,6 +250,7 @@ if __name__ == '__main__':
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
         data_collator=collator,
+        optimizer_cls_and_kwargs=optimizer_cls_and_kwargs,
     )
 
     trainer.train()

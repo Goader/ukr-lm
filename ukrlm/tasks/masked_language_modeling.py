@@ -8,8 +8,8 @@ from torch import nn
 import lightning.pytorch as pl
 from lightning.pytorch.utilities import rank_zero_info
 from torchmetrics.classification import MulticlassAccuracy
-from transformers import AutoModelForMaskedLM
 
+from ukrlm.optimizers import instantiate_optimizer
 from ukrlm.schedulers import instantiate_scheduler
 
 
@@ -52,7 +52,7 @@ class MaskedLanguageModelingTask(pl.LightningModule):
             self.local_step += 1  # we do not need to increment it any further after initial logging
         del batch['id']
 
-        # temporary fix, because model does not accept this parameter
+        # temporary fix, because the model does not accept this parameter
         special_tokens_mask = batch.pop('special_tokens_mask', None)
 
         model_output = self.model(**batch)
@@ -99,13 +99,22 @@ class MaskedLanguageModelingTask(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.hparams.task.learning_rate,
-            weight_decay=self.hparams.task.weight_decay,
-            betas=(self.hparams.task.adam_beta1, self.hparams.task.adam_beta2),
-        )
+        # FIXME move to bf16 training fully
+        # FIXME how do I keep rope and normalization layers in fp32? https://optimi.benjaminwarner.dev/kahan_summation/
+        optimizer = instantiate_optimizer(self, self.cfg)
         scheduler = instantiate_scheduler(optimizer, self.cfg)
+
+        # loading optimizer states, but not hyperparameters
+        if self.cfg.model.context_extension_phase:
+            assert self.cfg.model.checkpoint_path is not None, 'checkpoint_path must be passed for context extension phase'
+            param_groups = optimizer.state_dict()['param_groups']
+            optimizer_state = torch.load(self.cfg.model.checkpoint_path)['optimizer_states'][0]['state']
+            state_dict = {
+                'param_groups': param_groups,
+                'state': optimizer_state,
+            }
+            optimizer.load_state_dict(state_dict)
+            del state_dict, optimizer_state
 
         return {
             'optimizer': optimizer,

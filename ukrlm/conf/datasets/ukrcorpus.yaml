@@ -1,0 +1,7 @@
+ukrcorpus:
+  name: "ukrcorpus"
+  streaming: false
+  num_shards: 240
+  keep_in_memory: false
+  tokenized: true
+  tokenized_dataset_path: null
